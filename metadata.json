@@ -1,0 +1,6 @@
+{
+  "name": "Scrcpy Hub",
+  "description": "Native macOS/Windows desktop UI wrapper for scrcpy and adb screen mirroring and device management.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
