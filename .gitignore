@@ -47,3 +47,6 @@ desktop.ini
 
 # TypeScript
 *.tsbuildinfo
+
+# Google AI Studio / Internal Artifacts
+metadata.json

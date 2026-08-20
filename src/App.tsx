@@ -39,6 +39,23 @@ import {
   Radio,
 } from 'lucide-react';
 
+const defaultConfig: ScrcpyConfig = {
+  serial: '',
+  maxSize: 1080,
+  maxFps: 60,
+  audioSource: 'internal',
+  videoBitRate: 8,
+  videoCodec: 'h264',
+  turnScreenOff: false,
+  stayAwake: true,
+  alwaysOnTop: false,
+  showTouches: false,
+  readOnly: false,
+  record: false,
+  recordFileName: '',
+  customArgs: '',
+};
+
 export default function App() {
   // Device & Connection State
   const [devices, setDevices] = useState<Device[]>([]);
@@ -52,22 +69,24 @@ export default function App() {
   const [recentIps, setRecentIps] = useState<string[]>(['192.168.1.50', '192.168.0.105']);
 
   // Scrcpy Mirroring Configuration State
-  const [config, setConfig] = useState<ScrcpyConfig>({
-    serial: '',
-    maxSize: 1080,
-    maxFps: 60,
-    audioSource: 'internal',
-    videoBitRate: 8,
-    videoCodec: 'h264',
-    turnScreenOff: false,
-    stayAwake: true,
-    alwaysOnTop: false,
-    showTouches: false,
-    readOnly: false,
-    record: false,
-    recordFileName: '',
-    customArgs: '',
+  const [config, setConfig] = useState<ScrcpyConfig>(() => {
+    const saved = localStorage.getItem('scrcpy-hub-config');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        return { ...defaultConfig, ...parsed, serial: '' };
+      } catch (e) {
+        console.error('Failed to parse saved config', e);
+      }
+    }
+    return defaultConfig;
   });
+
+  // Auto-save configuration on change (excluding serial to avoid "dead serial" issues on boot)
+  useEffect(() => {
+    const { serial, ...rest } = config;
+    localStorage.setItem('scrcpy-hub-config', JSON.stringify(rest));
+  }, [config]);
 
   // Session & UI States
   const [isMirroring, setIsMirroring] = useState(false);
