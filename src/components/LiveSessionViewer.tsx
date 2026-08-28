@@ -34,7 +34,7 @@ export const LiveSessionViewer: React.FC<LiveSessionViewerProps> = ({
 }) => {
   const [orientation, setOrientation] = useState<'portrait' | 'landscape'>('portrait');
   const [currentTime, setCurrentTime] = useState('09:41');
-  const [fpsCounter, setFpsCounter] = useState(60);
+  const [fpsCounter, setFpsCounter] = useState<number | 'N/A'>('N/A');
   const [activeApp, setActiveApp] = useState<'home' | 'camera' | 'settings' | 'gallery' | 'browser'>('home');
   const [touchRipples, setTouchRipples] = useState<{ id: number; x: number; y: number }[]>([]);
   const [flashScreen, setFlashScreen] = useState(false);
@@ -51,16 +51,13 @@ export const LiveSessionViewer: React.FC<LiveSessionViewerProps> = ({
     return () => clearInterval(timer);
   }, []);
 
-  // Simulate FPS fluctuation during mirroring
+  // FPS is displayed as N/A as real telemetry is not implemented from scrcpy logs yet
   useEffect(() => {
-    if (!isMirroring) return;
-    const interval = setInterval(() => {
-      const base = config.maxFps || 60;
-      const jitter = Math.floor(Math.random() * 5) - 2;
-      setFpsCounter(Math.max(20, base + jitter));
-    }, 1500);
-    return () => clearInterval(interval);
-  }, [isMirroring, config.maxFps]);
+    if (!isMirroring) {
+      setFpsCounter('N/A');
+      return;
+    }
+  }, [isMirroring]);
 
   const handleScreenClick = (e: React.MouseEvent<HTMLDivElement>) => {
     if (config.readOnly) return;
@@ -94,7 +91,7 @@ export const LiveSessionViewer: React.FC<LiveSessionViewerProps> = ({
           <div className="flex items-center gap-2 bg-[#0D1117]/95 px-3 py-1.5 rounded-full border border-[#30363D] shadow-lg">
             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
             <span className="text-[11px] font-mono font-semibold text-emerald-400">
-              {fpsCounter} FPS
+              {fpsCounter}{typeof fpsCounter === 'number' ? ' FPS' : ''}
             </span>
             <span className="text-[#30363D] text-xs">•</span>
             <span className="text-[11px] font-mono text-gray-300">

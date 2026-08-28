@@ -1,8 +1,14 @@
 const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
 const path = require('path');
-const { spawn, exec } = require('child_process');
+const { spawn } = require('child_process');
 const fs = require('fs');
 const nativeImage = require('electron').nativeImage;
+const { isValidSerial, isValidIpv4, normalizePort, parseCustomArgs } = require('./shared/adb-utils.cjs');
+const { getAdbPath, getScrcpyPath } = require('./shared/binary-paths.cjs');
+const { execAdb } = require('./shared/adb-daemon.cjs');
+
+const adbPath = getAdbPath();
+const scrcpyPath = getScrcpyPath();
 
 // macOS Path Fix: Inject standard Homebrew and local binary paths into process.env.PATH
 if (process.platform === 'darwin') {
@@ -95,7 +101,7 @@ function emitLog(level, message, serial = null) {
 
 ipcMain.handle('get-devices', async () => {
   return new Promise((resolve) => {
-    exec('adb devices -l', (error, stdout, stderr) => {
+    execAdb(adbPath, ['devices', '-l'], (error, stdout, stderr) => {
       if (error) {
         emitLog('error', `ADB error: ${stderr || error.message}`);
         resolve({ success: false, error: stderr || error.message, devices: [] });
@@ -139,7 +145,7 @@ ipcMain.handle('start-scrcpy', async (event, config) => {
     recordFileName = '', videoBitRate = 8, videoCodec = 'h264', customArgs = '',
   } = config || {};
 
-  if (!serial) return { success: false, error: 'No device serial provided' };
+  if (!serial || !isValidSerial(serial)) return { success: false, error: 'Invalid device serial provided' };
   if (activeProcesses.has(serial)) return { success: false, error: `Mirroring session already active for ${serial}` };
 
   const args = ['-s', serial];
@@ -165,11 +171,11 @@ ipcMain.handle('start-scrcpy', async (event, config) => {
   }
 
   if (customArgs && customArgs.trim().length > 0) {
-    args.push(...customArgs.trim().split(/\s+/));
+    args.push(...parseCustomArgs(customArgs));
   }
 
   try {
-    const child = spawn('scrcpy', args, { shell: false, env: process.env });
+    const child = spawn(scrcpyPath, args, { shell: false, env: process.env });
     activeProcesses.set(serial, child);
 
     child.stdout.on('data', (data) => emitLog('stdout', data.toString().trim(), serial));
@@ -216,10 +222,17 @@ ipcMain.handle('stop-scrcpy', async (event, serial) => {
 });
 
 ipcMain.handle('connect-wireless', async (event, { ip, port = 5555 }) => {
-  if (!ip || !ip.trim()) return { success: false, error: 'Please enter a valid IP address' };
+  if (!ip || !isValidIpv4(ip)) return { success: false, error: 'Please enter a valid IPv4 address' };
+  const normalizedPort = normalizePort(port);
+  if (!normalizedPort) return { success: false, error: 'Invalid port number' };
+
   return new Promise((resolve) => {
-    exec(`adb tcpip ${port}`, () => {
-      exec(`adb connect ${ip.trim()}:${port}`, (err, stdout) => {
+    execAdb(adbPath, ['tcpip', normalizedPort], (tcpErr) => {
+      if (tcpErr) {
+        resolve({ success: false, error: tcpErr.message });
+        return;
+      }
+      execAdb(adbPath, ['connect', `${ip}:${normalizedPort}`], (err, stdout) => {
         if (err) resolve({ success: false, error: err.message });
         else resolve({ success: true, message: stdout.trim() });
       });
@@ -228,8 +241,11 @@ ipcMain.handle('connect-wireless', async (event, { ip, port = 5555 }) => {
 });
 
 ipcMain.handle('disconnect-wireless', async (event, target) => {
+  if (!target || (!isValidSerial(target) && !isValidIpv4(target.split(':')[0]))) {
+    return { success: false, error: 'Invalid target' };
+  }
   return new Promise((resolve) => {
-    exec(`adb disconnect ${target}`, (error, stdout) => {
+    execAdb(adbPath, ['disconnect', target], (error, stdout) => {
       resolve({ success: !error, message: stdout ? stdout.trim() : '' });
     });
   });

@@ -1,8 +1,18 @@
 import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { spawn, exec } from 'child_process';
+import { createRequire } from 'module';
+import { spawn, execFile } from 'child_process';
 import { createServer as createViteServer } from 'vite';
+
+// Using require for commonjs shared utilities
+const require = createRequire(import.meta.url);
+const { isValidSerial, isValidIpv4, normalizePort, parseCustomArgs } = require('./shared/adb-utils.cjs');
+const { getAdbPath, getScrcpyPath } = require('./shared/binary-paths.cjs');
+const { execAdb } = require('./shared/adb-daemon.cjs');
+
+const adbPath = getAdbPath();
+const scrcpyPath = getScrcpyPath();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -74,8 +84,8 @@ app.get('/api/health', (req, res) => {
 
 // Binary check API
 app.get('/api/check-binaries', (req, res) => {
-  exec('adb --version', (adbErr, adbOut) => {
-    exec('scrcpy --version', (scrcpyErr, scrcpyOut) => {
+  execFile(adbPath, ['--version'], (adbErr, adbOut) => {
+    execFile(scrcpyPath, ['--version'], (scrcpyErr, scrcpyOut) => {
       res.json({
         adb: {
           available: !adbErr,
@@ -92,7 +102,7 @@ app.get('/api/check-binaries', (req, res) => {
 
 // Get ADB Devices API
 app.get('/api/devices', (req, res) => {
-  exec('adb devices -l', (error, stdout, stderr) => {
+  execAdb(adbPath, ['devices', '-l'], (error, stdout, stderr) => {
     const realDevices: any[] = [];
 
     if (!error && stdout) {
@@ -169,8 +179,8 @@ app.post('/api/start-scrcpy', (req, res) => {
     customArgs = '',
   } = config;
 
-  if (!serial) {
-    return res.status(400).json({ success: false, error: 'Device serial is required' });
+  if (!serial || !isValidSerial(serial)) {
+    return res.status(400).json({ success: false, error: 'Valid device serial is required' });
   }
 
   // Construct CLI arguments
@@ -195,10 +205,10 @@ app.post('/api/start-scrcpy', (req, res) => {
   }
 
   if (customArgs && customArgs.trim().length > 0) {
-    args.push(...customArgs.trim().split(/\s+/));
+    args.push(...parseCustomArgs(customArgs));
   }
 
-  const fullCommand = `scrcpy ${args.join(' ')}`;
+  const fullCommand = `${scrcpyPath} ${args.join(' ')}`;
   pushLog('info', `Spawning session: ${fullCommand}`, serial);
 
   // Track session
@@ -211,7 +221,7 @@ app.post('/api/start-scrcpy', (req, res) => {
 
   // Attempt real spawn if scrcpy binary exists, or simulate live stream session
   try {
-    const child = spawn('scrcpy', args, { shell: false, env: process.env });
+    const child = spawn(scrcpyPath, args, { shell: false, env: process.env });
     
     child.stdout?.on('data', (d) => pushLog('stdout', d.toString().trim(), serial));
     child.stderr?.on('data', (d) => pushLog('stderr', d.toString().trim(), serial));
@@ -272,17 +282,29 @@ app.post('/api/stop-scrcpy', (req, res) => {
 app.post('/api/connect-wireless', (req, res) => {
   const { ip, port = 5555 } = req.body || {};
 
-  if (!ip || !ip.trim()) {
-    return res.status(400).json({ success: false, error: 'Valid IP address required' });
+  if (!ip || !isValidIpv4(ip)) {
+    return res.status(400).json({ success: false, error: 'Valid IPv4 address required' });
+  }
+  const normalizedPort = normalizePort(port);
+  if (!normalizedPort) {
+    return res.status(400).json({ success: false, error: 'Invalid port number' });
   }
 
   const cleanIp = ip.trim();
-  const target = `${cleanIp}:${port}`;
+  const target = `${cleanIp}:${normalizedPort}`;
 
-  pushLog('info', `Executing: adb tcpip ${port}`);
-  exec(`adb tcpip ${port}`, (tcpErr) => {
-    pushLog('info', `Executing: adb connect ${target}`);
-    exec(`adb connect ${target}`, (connectErr, stdout) => {
+  pushLog('info', `Executing: ${adbPath} tcpip ${normalizedPort}`);
+  execAdb(adbPath, ['tcpip', normalizedPort], (tcpErr) => {
+    if (tcpErr) {
+      pushLog('error', `ADB tcpip error: ${tcpErr.message}`);
+      return res.status(500).json({ success: false, error: tcpErr.message });
+    }
+    pushLog('info', `Executing: ${adbPath} connect ${target}`);
+    execAdb(adbPath, ['connect', target], (connectErr, stdout) => {
+      if (connectErr) {
+        pushLog('error', `ADB connect error: ${connectErr.message}`);
+        return res.status(500).json({ success: false, error: connectErr.message });
+      }
       const out = stdout?.trim() || `connected to ${target}`;
       pushLog('info', `ADB Connect result: ${out}`);
 
@@ -316,12 +338,12 @@ app.post('/api/connect-wireless', (req, res) => {
 // Wireless Disconnect API
 app.post('/api/disconnect-wireless', (req, res) => {
   const { target } = req.body || {};
-  if (!target) {
-    return res.status(400).json({ success: false, error: 'Target device serial required' });
+  if (!target || (!isValidSerial(target) && !isValidIpv4(target.split(':')[0]))) {
+    return res.status(400).json({ success: false, error: 'Valid target device serial required' });
   }
 
-  pushLog('info', `Executing: adb disconnect ${target}`);
-  exec(`adb disconnect ${target}`, (err, stdout) => {
+  pushLog('info', `Executing: ${adbPath} disconnect ${target}`);
+  execAdb(adbPath, ['disconnect', target], (err, stdout) => {
     // Remove from simulated pool if present
     const idx = simulatedDevices.findIndex((d) => d.serial === target);
     if (idx !== -1) {
@@ -365,8 +387,8 @@ app.post('/api/device-action', (req, res) => {
     app_switch: 187,
   };
 
-  if (keyMap[action]) {
-    exec(`adb -s ${serial} shell input keyevent ${keyMap[action]}`, (err) => {
+  if (keyMap[action] && serial && isValidSerial(serial)) {
+    execAdb(adbPath, ['-s', serial, 'shell', 'input', 'keyevent', String(keyMap[action])], (err) => {
       if (err) {
         // Just log in sandbox mode
       }

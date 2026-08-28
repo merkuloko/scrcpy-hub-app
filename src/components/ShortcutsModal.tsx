@@ -10,66 +10,51 @@ export const ShortcutsModal: React.FC<ShortcutsModalProps> = ({ isOpen, onClose 
   if (!isOpen) return null;
 
   const shortcuts = [
-    { key: 'MOD + f', description: 'Toggle Fullscreen' },
+    { key: 'MOD + f', description: 'Toggle fullscreen' },
     { key: 'MOD + g', description: 'Resize window to 1:1 scale' },
-    { key: 'MOD + x', description: 'Resize window to remove black borders' },
-    { key: 'MOD + h', description: 'Press HOME button' },
-    { key: 'MOD + b', description: 'Press BACK button' },
-    { key: 'MOD + s', description: 'Open App Switcher (Recents)' },
-    { key: 'MOD + m', description: 'Press MENU button' },
-    { key: 'MOD + p', description: 'Press POWER button' },
-    { key: 'MOD + o', description: 'Turn device screen OFF (mirroring stays ON)' },
-    { key: 'MOD + Shift + o', description: 'Turn device screen ON' },
-    { key: 'MOD + r', description: 'Rotate device display' },
-    { key: 'MOD + n', description: 'Expand notification panel' },
-    { key: 'MOD + Shift + n', description: 'Collapse notification panel' },
-    { key: 'MOD + c', description: 'Copy device clipboard to computer' },
-    { key: 'MOD + v', description: 'Paste computer clipboard to device' },
-    { key: 'MOD + Shift + v', description: 'Inject computer clipboard as text' },
-    { key: 'MOD + i', description: 'Toggle FPS counter in terminal' },
-    { key: 'Right-Click', description: 'Press BACK (or turn screen on if off)' },
-    { key: 'Middle-Click', description: 'Press HOME button' },
+    { key: 'MOD + x', description: 'Remove black borders' },
+    { key: 'MOD + h', description: 'Home button' },
+    { key: 'MOD + b', description: 'Back button' },
+    { key: 'MOD + s', description: 'App switcher' },
+    { key: 'MOD + p', description: 'Power button' },
+    { key: 'MOD + o', description: 'Turn device screen off' },
+    { key: 'MOD + Shift + o', description: 'Turn device screen on' },
+    { key: 'MOD + r', description: 'Rotate display' },
+    { key: 'MOD + n', description: 'Expand notifications' },
+    { key: 'MOD + c', description: 'Copy device clipboard' },
+    { key: 'MOD + v', description: 'Paste to device' },
+    { key: 'Right click', description: 'Back' },
+    { key: 'Middle click', description: 'Home' },
   ];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in">
-      <div className="bg-[#161B22] border border-[#30363D] rounded-xl w-full max-w-2xl shadow-2xl overflow-hidden text-[#E2E8F0] flex flex-col max-h-[90vh]">
-        {/* Modal Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-[#30363D] bg-[#0D1117] shrink-0">
-          <div className="flex items-center gap-2.5">
-            <div className="p-2 rounded-lg bg-blue-600/10 text-blue-400 border border-blue-500/20">
-              <Keyboard className="w-4 h-4" />
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4 backdrop-blur-sm animate-in fade-in duration-150">
+      <div className="flex max-h-[86vh] w-full max-w-[680px] flex-col overflow-hidden rounded-[14px] border border-[var(--border)] bg-[var(--surface-solid)] text-[var(--text)] shadow-[var(--shadow-popover)]">
+        <div className="flex items-start justify-between border-b border-[var(--border)] px-5 py-4">
+          <div className="flex items-start gap-3">
+            <div className="mt-0.5 flex h-8 w-8 items-center justify-center rounded-[9px] border border-[var(--border)] bg-white/[0.045] text-[var(--accent)]">
+              <Keyboard className="h-4 w-4" />
             </div>
             <div>
-              <h3 className="text-sm font-semibold text-[#E2E8F0]">Keyboard Shortcuts</h3>
-              <p className="text-[11px] text-gray-400">Essential controls for Scrcpy</p>
+              <h3 className="text-[15px] font-semibold">Keyboard shortcuts</h3>
+              <p className="mt-1 text-[12px] text-[var(--text-secondary)]">Common scrcpy controls for active sessions.</p>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="p-1 rounded-md text-gray-400 hover:text-white hover:bg-[#30363D] transition-colors"
-          >
-            <X className="w-4 h-4" />
+          <button type="button" onClick={onClose} className="btn btn-icon h-7 min-h-7 w-7" title="Close">
+            <X className="h-3.5 w-3.5" />
           </button>
         </div>
 
-        {/* Modal Body */}
-        <div className="p-5 overflow-y-auto custom-scrollbar">
-          <div className="mb-4 p-3 bg-blue-600/5 border border-blue-500/20 rounded-lg">
-            <p className="text-[11px] text-blue-400">
-              <span className="font-semibold uppercase mr-1">Note:</span> 
-              MOD defaults to <span className="text-blue-300 font-mono">Left Alt</span> or <span className="text-blue-300 font-mono">Left Super</span>.
-            </p>
+        <div className="scrollbar-soft overflow-y-auto px-5 py-4">
+          <div className="mb-4 rounded-[10px] border border-[var(--border)] bg-white/[0.03] px-3 py-2 text-[12px] text-[var(--text-secondary)]">
+            MOD defaults to Left Alt or Left Super.
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {shortcuts.map((shortcut, index) => (
-              <div 
-                key={index} 
-                className="flex items-center justify-between p-2.5 bg-[#0D1117] border border-[#30363D] rounded-lg hover:border-[#444c56] transition-colors"
-              >
-                <span className="text-[11px] text-gray-300">{shortcut.description}</span>
-                <kbd className="px-2 py-0.5 rounded bg-[#161B22] border border-[#30363D] text-[10px] font-mono text-blue-400 shadow-sm">
+          <div className="grid grid-cols-1 gap-x-5 md:grid-cols-2">
+            {shortcuts.map((shortcut) => (
+              <div key={`${shortcut.key}-${shortcut.description}`} className="flex items-center justify-between gap-4 border-t border-[var(--border)] py-2.5 first:border-t-0 md:[&:nth-child(2)]:border-t-0">
+                <span className="text-[12px] text-[var(--text-secondary)]">{shortcut.description}</span>
+                <kbd className="mono shrink-0 rounded-[6px] border border-[var(--border)] bg-white/[0.045] px-2 py-1 text-[11px] text-[var(--text)]">
                   {shortcut.key}
                 </kbd>
               </div>
@@ -77,14 +62,8 @@ export const ShortcutsModal: React.FC<ShortcutsModalProps> = ({ isOpen, onClose 
           </div>
         </div>
 
-        {/* Footer */}
-        <div className="px-5 py-3 border-t border-[#30363D] bg-[#0D1117] shrink-0 flex justify-end">
-          <button
-            onClick={onClose}
-            className="px-4 py-1.5 bg-[#30363D] hover:bg-[#444c56] text-white text-xs font-medium rounded-md transition-colors"
-          >
-            Close
-          </button>
+        <div className="flex justify-end border-t border-[var(--border)] px-5 py-3">
+          <button type="button" onClick={onClose} className="btn">Close</button>
         </div>
       </div>
     </div>

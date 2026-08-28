@@ -4,7 +4,6 @@ import { TerminalLogs } from './components/TerminalLogs';
 import { WirelessModal } from './components/WirelessModal';
 import { CodeViewerModal } from './components/CodeViewerModal';
 import { ShortcutsModal } from './components/ShortcutsModal';
-import { OnboardingOverlay } from './components/OnboardingOverlay';
 import { apiClient, isElectron } from './lib/api';
 import { Device, ScrcpyConfig, LogEntry } from './types';
 import {
@@ -148,7 +147,27 @@ export default function App() {
       const unsubscribe = window.api.onScrcpyLog((entry: LogEntry) => {
         setLogs((prev) => [...prev.slice(-300), entry]);
       });
-      return () => unsubscribe();
+
+      const unsubscribeStatus = window.api.onSessionStatusChanged((data: { serial: string; status: string; error?: string }) => {
+        if (data.status === 'stopped' || data.status === 'error') {
+          setDevices(prev => prev.map(d => d.serial === data.serial ? { ...d, isMirroring: false } : d));
+          setSelectedDevice(current => {
+            if (current && current.serial === data.serial) {
+              setIsMirroring(false);
+              return { ...current, isMirroring: false };
+            }
+            return current;
+          });
+          if (data.status === 'error' && data.error) {
+            showNotification(`Session error for ${data.serial}: ${data.error}`, 'error');
+          }
+        }
+      });
+
+      return () => {
+        unsubscribe();
+        unsubscribeStatus();
+      };
     } else {
       // Web fallback log polling
       const logInterval = setInterval(async () => {
@@ -319,12 +338,15 @@ export default function App() {
     setShowOnboarding(false);
   };
 
-  return (
-    <div className="min-h-screen bg-[#0F1115] text-[#E2E8F0] flex flex-col font-sans selection:bg-blue-600/30 selection:text-blue-200">
-      {/* Onboarding Overlay */}
-      <OnboardingOverlay isOpen={showOnboarding} onClose={handleCloseOnboarding} />
+  const connectedDevices = devices.filter((device) => device.state === 'device');
+  const selectedStatusClass = isMirroring
+    ? 'status-success'
+    : selectedDevice?.state === 'device'
+    ? 'status-warning'
+    : 'status-error';
 
-      {/* Top Header */}
+  return (
+    <div className="app-shell flex overflow-hidden">
       <Header
         devices={devices}
         selectedDevice={selectedDevice}
@@ -339,552 +361,457 @@ export default function App() {
         onOpenShortcuts={() => setIsShortcutsModalOpen(true)}
       />
 
-      {/* Floating Notification Toast */}
+      <div className="desktop-window-bar hidden lg:flex">
+        <div className="traffic-lights" aria-label="Window controls">
+          <span className="traffic-light red" />
+          <span className="traffic-light yellow" />
+          <span className="traffic-light green" />
+        </div>
+        <div className="window-title-label">Scrcpy Hub</div>
+      </div>
+
       {notification && (
-        <div className="fixed bottom-6 right-6 z-50 animate-in fade-in slide-in-from-bottom-3 duration-200">
-          <div
-            className={`flex items-center gap-2.5 px-4 py-3 rounded-lg shadow-2xl border backdrop-blur-md text-xs font-medium ${
-              notification.type === 'success'
-                ? 'bg-[#161B22] border-emerald-500/50 text-emerald-300 shadow-black/60'
-                : notification.type === 'error'
-                ? 'bg-[#161B22] border-rose-500/50 text-rose-300 shadow-black/60'
-                : 'bg-[#161B22] border-[#30363D] text-[#E2E8F0] shadow-black/60'
-            }`}
-          >
-            {notification.type === 'success' && <CheckCircle2 className="w-4 h-4 text-emerald-400" />}
-            {notification.type === 'error' && <AlertTriangle className="w-4 h-4 text-rose-400" />}
-            {notification.type === 'info' && <Sparkles className="w-4 h-4 text-blue-400" />}
-            <span>{notification.message}</span>
+        <div className="fixed right-5 top-5 z-50 animate-in fade-in slide-in-from-top-2 duration-200">
+          <div className="surface flex max-w-sm items-center gap-2.5 px-3.5 py-3 text-[12px] font-medium">
+            {notification.type === 'success' && <CheckCircle2 className="h-4 w-4 text-[var(--success)]" />}
+            {notification.type === 'error' && <AlertTriangle className="h-4 w-4 text-[var(--error)]" />}
+            {notification.type === 'info' && <Sparkles className="h-4 w-4 text-[var(--accent)]" />}
+            <span className="text-[var(--text-secondary)]">{notification.message}</span>
           </div>
         </div>
       )}
 
-      {/* Main Content Grid: 2 Columns */}
-      <main className="flex-1 max-w-6xl w-full mx-auto p-4 sm:p-6 lg:p-8 space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
-          {/* ============================================================
-              LEFT COLUMN: PRIMARY ACTIONS & CORE HARDWARE SLIDERS
-             ============================================================ */}
-          <div className="space-y-6">
-            {/* Primary Hero Control Card */}
-            <div className="bg-[#161B22] rounded-xl border border-[#30363D] p-5 shadow-xl space-y-5">
-              <div className="flex items-center justify-between border-b border-[#30363D] pb-3">
-                <div className="flex items-center gap-2">
-                  <Monitor className="w-4 h-4 text-blue-400" />
-                  <h2 className="text-xs font-bold uppercase tracking-wider text-gray-200">
-                    Mirroring Controls
-                  </h2>
-                </div>
-                {selectedDevice ? (
-                  <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-[#0D1117] border border-[#30363D] text-[11px] font-mono text-gray-300">
-                    <span
-                      className={`w-2 h-2 rounded-full ${
-                        isMirroring ? 'bg-emerald-400 animate-pulse' : 'bg-blue-400'
-                      }`}
-                    />
-                    <span className="truncate max-w-[130px]">{selectedDevice.model}</span>
-                  </div>
-                ) : (
-                  <span className="text-[11px] text-gray-500 italic">No Device Selected</span>
-                )}
-              </div>
-
-              {/* Large Prominent Hero Button */}
-              {isMirroring ? (
-                <button
-                  type="button"
-                  onClick={handleStopMirroring}
-                  disabled={isLoadingSession}
-                  className="w-full py-4 px-6 rounded-xl bg-gradient-to-r from-red-600 to-rose-700 hover:from-red-500 hover:to-rose-600 text-white font-semibold shadow-lg shadow-red-950/50 transition-all flex items-center justify-center gap-3 active:scale-[0.99] disabled:opacity-50 cursor-pointer"
-                >
-                  <Square className="w-5 h-5 fill-current" />
-                  <span className="text-base tracking-wide">Stop Mirroring Session</span>
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={handleStartMirroring}
-                  disabled={!selectedDevice || isLoadingSession}
-                  className="w-full py-4 px-6 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-semibold shadow-lg shadow-blue-950/50 transition-all flex items-center justify-center gap-3 active:scale-[0.99] disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
-                >
-                  {isLoadingSession ? (
-                    <>
-                      <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                      <span className="text-base tracking-wide">Launching Pipeline...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Play className="w-5 h-5 fill-current" />
-                      <span className="text-base tracking-wide">Start Screen Mirroring</span>
-                    </>
-                  )}
-                </button>
-              )}
-
-              {/* Hardware Quick Action Strip (Active during session or for quick control) */}
-              <div className="p-3 bg-[#0D1117] rounded-lg border border-[#30363D] flex items-center justify-between">
-                <span className="text-[11px] font-medium text-gray-400">Quick Hardware Keys</span>
-                <div className="flex items-center gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => handleTriggerAction('back')}
-                    disabled={!selectedDevice}
-                    className="p-1.5 rounded bg-[#161B22] hover:bg-[#30363D] text-gray-300 hover:text-white border border-[#30363D] text-xs transition-colors disabled:opacity-30"
-                    title="Back Key (◀)"
-                  >
-                    ◀
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleTriggerAction('home')}
-                    disabled={!selectedDevice}
-                    className="p-1.5 rounded bg-[#161B22] hover:bg-[#30363D] text-gray-300 hover:text-white border border-[#30363D] text-xs transition-colors disabled:opacity-30"
-                    title="Home Key (●)"
-                  >
-                    ●
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleTriggerAction('app_switch')}
-                    disabled={!selectedDevice}
-                    className="p-1.5 rounded bg-[#161B22] hover:bg-[#30363D] text-gray-300 hover:text-white border border-[#30363D] text-xs transition-colors disabled:opacity-30"
-                    title="App Switcher (■)"
-                  >
-                    ■
-                  </button>
-                  <div className="w-px h-3.5 bg-[#30363D] mx-0.5" />
-                  <button
-                    type="button"
-                    onClick={() => handleTriggerAction('power')}
-                    disabled={!selectedDevice}
-                    className="p-1.5 rounded bg-[#161B22] hover:bg-rose-500/20 hover:text-rose-400 text-gray-300 border border-[#30363D] text-xs transition-colors disabled:opacity-30"
-                    title="Power Button"
-                  >
-                    <Power className="w-3 h-3" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleTriggerAction('volume_up')}
-                    disabled={!selectedDevice}
-                    className="p-1.5 rounded bg-[#161B22] hover:bg-[#30363D] text-gray-300 hover:text-white border border-[#30363D] text-xs transition-colors disabled:opacity-30"
-                    title="Volume Up"
-                  >
-                    <Volume2 className="w-3 h-3" />
-                  </button>
-                </div>
-              </div>
-
-              {/* Native Range Slider 1: Resolution (480p to 1440p) */}
-              <div className="space-y-2.5 pt-2">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-1.5 text-xs font-medium text-gray-300">
-                    <Tv className="w-3.5 h-3.5 text-blue-400" />
-                    <span>Resolution (Max Size)</span>
-                  </div>
-                  <span className="text-[11px] font-mono font-semibold px-2 py-0.5 rounded bg-[#0D1117] border border-[#30363D] text-blue-400">
-                    {config.maxSize === 0 ? 'Native (Uncapped)' : `${config.maxSize}p`}
-                  </span>
-                </div>
-
-                <input
-                  type="range"
-                  min="480"
-                  max="1440"
-                  step="80"
-                  value={config.maxSize || 1080}
-                  onChange={(e) => handleConfigChange({ maxSize: Number(e.target.value) })}
-                  className="w-full h-1.5 bg-[#0D1117] rounded-lg appearance-none cursor-pointer accent-blue-500 border border-[#30363D]"
-                />
-
-                {/* Preset Chips */}
-                <div className="grid grid-cols-4 gap-1.5">
-                  {[
-                    { label: '480p', value: 480 },
-                    { label: '720p HD', value: 720 },
-                    { label: '1080p FHD', value: 1080 },
-                    { label: '1440p 2K', value: 1440 },
-                  ].map((preset) => (
-                    <button
-                      key={preset.value}
-                      type="button"
-                      onClick={() => handleConfigChange({ maxSize: preset.value })}
-                      className={`py-1 rounded text-[11px] font-mono transition-colors border ${
-                        config.maxSize === preset.value
-                          ? 'bg-blue-600/20 border-blue-500/50 text-blue-300 font-semibold'
-                          : 'bg-[#0D1117] border-[#30363D] text-gray-400 hover:text-gray-200'
-                      }`}
-                    >
-                      {preset.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Native Range Slider 2: Framerate Limit (30 FPS to 120 FPS) */}
-              <div className="space-y-2.5 pt-2">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-1.5 text-xs font-medium text-gray-300">
-                    <Gauge className="w-3.5 h-3.5 text-emerald-400" />
-                    <span>Framerate Limit</span>
-                  </div>
-                  <span className="text-[11px] font-mono font-semibold px-2 py-0.5 rounded bg-[#0D1117] border border-[#30363D] text-emerald-400">
-                    {config.maxFps} FPS
-                  </span>
-                </div>
-
-                <input
-                  type="range"
-                  min="30"
-                  max="120"
-                  step="10"
-                  value={config.maxFps}
-                  onChange={(e) => handleConfigChange({ maxFps: Number(e.target.value) })}
-                  className="w-full h-1.5 bg-[#0D1117] rounded-lg appearance-none cursor-pointer accent-emerald-500 border border-[#30363D]"
-                />
-
-                {/* FPS Preset Chips */}
-                <div className="grid grid-cols-4 gap-1.5">
-                  {[
-                    { label: '30 FPS', value: 30 },
-                    { label: '60 FPS', value: 60 },
-                    { label: '90 FPS', value: 90 },
-                    { label: '120 FPS', value: 120 },
-                  ].map((preset) => (
-                    <button
-                      key={preset.value}
-                      type="button"
-                      onClick={() => handleConfigChange({ maxFps: preset.value })}
-                      className={`py-1 rounded text-[11px] font-mono transition-colors border ${
-                        config.maxFps === preset.value
-                          ? 'bg-emerald-600/20 border-emerald-500/50 text-emerald-300 font-semibold'
-                          : 'bg-[#0D1117] border-[#30363D] text-gray-400 hover:text-gray-200'
-                      }`}
-                    >
-                      {preset.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Bitrate & Video Codec Section */}
-              <div className="grid grid-cols-2 gap-3 pt-2 border-t border-[#30363D]">
-                <div>
-                  <label className="text-[11px] font-medium text-gray-400 block mb-1">
-                    Bitrate (Mbps)
-                  </label>
-                  <select
-                    value={config.videoBitRate}
-                    onChange={(e) => handleConfigChange({ videoBitRate: Number(e.target.value) })}
-                    className="w-full px-2.5 py-1.5 bg-[#0D1117] border border-[#30363D] rounded-md text-xs text-gray-200 focus:outline-none focus:border-blue-500 font-mono"
-                  >
-                    <option value="4">4 Mbps (Low Bandwidth)</option>
-                    <option value="8">8 Mbps (Default)</option>
-                    <option value="16">16 Mbps (High Quality)</option>
-                    <option value="32">32 Mbps (Ultra Crisp)</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="text-[11px] font-medium text-gray-400 block mb-1">
-                    Video Codec
-                  </label>
-                  <select
-                    value={config.videoCodec}
-                    onChange={(e) => handleConfigChange({ videoCodec: e.target.value as any })}
-                    className="w-full px-2.5 py-1.5 bg-[#0D1117] border border-[#30363D] rounded-md text-xs text-gray-200 focus:outline-none focus:border-blue-500 font-mono"
-                  >
-                    <option value="h264">H.264 (Maximum Compatibility)</option>
-                    <option value="h265">H.265 / HEVC (Efficient)</option>
-                    <option value="av1">AV1 (Next-Gen)</option>
-                  </select>
-                </div>
-              </div>
+      <main className="scrollbar-soft flex min-w-0 flex-1 flex-col overflow-y-auto">
+        <div className="window-drag-region sticky top-0 z-20 border-b border-[var(--border)] bg-[rgba(13,15,18,0.8)] px-5 py-3 backdrop-blur-xl lg:hidden">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-[14px] font-semibold text-[var(--text)]">Scrcpy Hub</h1>
+              <p className="caption">Android mirroring utility</p>
             </div>
-
-            {/* Generated Scrcpy CLI Command Box */}
-            <div className="bg-[#161B22] rounded-xl border border-[#30363D] p-4 shadow-xl space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold text-gray-300">Generated Command</span>
-                <button
-                  type="button"
-                  onClick={handleCopyCommand}
-                  className="flex items-center gap-1.5 px-2.5 py-1 rounded bg-[#0D1117] hover:bg-[#30363D] text-gray-300 hover:text-white border border-[#30363D] text-[11px] transition-colors font-medium cursor-pointer"
-                >
-                  {copiedCommand ? (
-                    <Check className="w-3.5 h-3.5 text-emerald-400" />
-                  ) : (
-                    <Copy className="w-3.5 h-3.5 text-blue-400" />
-                  )}
-                  <span>{copiedCommand ? 'Copied' : 'Copy'}</span>
-                </button>
-              </div>
-              <div className="p-2.5 bg-[#090D11] rounded-md border border-[#30363D] font-mono text-[11px] text-blue-300 break-all select-all">
-                <code>{generatedCommand}</code>
-              </div>
-            </div>
-          </div>
-
-          {/* ============================================================
-              RIGHT COLUMN: PREFERENCES & WIRELESS CONNECTION
-             ============================================================ */}
-          <div className="space-y-6">
-            {/* Preferences Card */}
-            <div className="bg-[#161B22] rounded-xl border border-[#30363D] p-5 shadow-xl space-y-4">
-              <div className="flex items-center justify-between border-b border-[#30363D] pb-3">
-                <div className="flex items-center gap-2">
-                  <Sliders className="w-4 h-4 text-blue-400" />
-                  <h2 className="text-xs font-bold uppercase tracking-wider text-gray-200">
-                    Preferences & Flags
-                  </h2>
-                </div>
-                <span className="text-[10px] text-gray-500 font-mono">Options</span>
-              </div>
-
-              {/* Audio Source Dropdown */}
-              <div className="space-y-1.5">
-                <label className="text-xs font-medium text-gray-300 flex items-center justify-between">
-                  <span>Audio Source</span>
-                  <span className="text-[10px] text-gray-500">Android 11+ required for internal</span>
-                </label>
-                <select
-                  value={config.audioSource}
-                  onChange={(e) => handleConfigChange({ audioSource: e.target.value as any })}
-                  className="w-full px-3 py-2 bg-[#0D1117] border border-[#30363D] rounded-md text-xs text-gray-200 focus:outline-none focus:border-blue-500 cursor-pointer"
-                >
-                  <option value="internal">Internal Audio Stream (Forward Device Sound)</option>
-                  <option value="mic">Microphone (Capture Device Mic)</option>
-                  <option value="disabled">Disabled / Muted (--no-audio, lowest latency)</option>
-                </select>
-              </div>
-
-              {/* Toggle Switch 1: Turn Screen Off */}
-              <div className="flex items-center justify-between p-3 rounded-lg bg-[#0D1117] border border-[#30363D]">
-                <div className="space-y-0.5 pr-2">
-                  <div className="flex items-center gap-1.5 text-xs font-medium text-gray-200">
-                    <EyeOff className="w-3.5 h-3.5 text-orange-400" />
-                    <span>Turn Screen Off on Start</span>
-                  </div>
-                  <p className="text-[11px] text-gray-400">
-                    Keeps physical display dark while mirroring to save battery
-                  </p>
-                </div>
-                <label className="relative inline-flex items-center cursor-pointer shrink-0">
-                  <input
-                    type="checkbox"
-                    checked={config.turnScreenOff}
-                    onChange={(e) => handleConfigChange({ turnScreenOff: e.target.checked })}
-                    className="sr-only peer"
-                  />
-                  <div className="w-9 h-5 bg-[#30363D] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600" />
-                </label>
-              </div>
-
-              {/* Toggle Switch 2: Record to MP4 */}
-              <div className="space-y-2 p-3 rounded-lg bg-[#0D1117] border border-[#30363D]">
-                <div className="flex items-center justify-between">
-                  <div className="space-y-0.5 pr-2">
-                    <div className="flex items-center gap-1.5 text-xs font-medium text-gray-200">
-                      <Video className="w-3.5 h-3.5 text-rose-400" />
-                      <span>Record Session to MP4</span>
-                    </div>
-                    <p className="text-[11px] text-gray-400">
-                      Save screen capture directly to video container
-                    </p>
-                  </div>
-                  <label className="relative inline-flex items-center cursor-pointer shrink-0">
-                    <input
-                      type="checkbox"
-                      checked={config.record}
-                      onChange={(e) => handleConfigChange({ record: e.target.checked })}
-                      className="sr-only peer"
-                    />
-                    <div className="w-9 h-5 bg-[#30363D] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-rose-600" />
-                  </label>
-                </div>
-
-                {config.record && (
-                  <div className="pt-2 border-t border-[#30363D]/60 flex items-center gap-2">
-                    <input
-                      type="text"
-                      placeholder="File name (default: timestamp)"
-                      value={config.recordFileName}
-                      onChange={(e) => handleConfigChange({ recordFileName: e.target.value })}
-                      className="flex-1 px-2.5 py-1.5 bg-[#161B22] border border-[#30363D] rounded text-xs text-gray-200 focus:outline-none focus:border-rose-500 font-mono"
-                    />
-                    <button
-                      type="button"
-                      onClick={handleOpenRecordings}
-                      className="px-2 py-1.5 rounded bg-[#161B22] hover:bg-[#30363D] border border-[#30363D] text-[11px] text-gray-300 hover:text-white flex items-center gap-1 transition-colors"
-                      title="Open recordings folder"
-                    >
-                      <FolderOpen className="w-3.5 h-3.5 text-yellow-400" />
-                      <span className="hidden sm:inline">Folder</span>
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              {/* Secondary Checkboxes */}
-              <div className="grid grid-cols-2 gap-2 pt-1">
-                <label className="flex items-center gap-2 p-2 rounded bg-[#0D1117] border border-[#30363D] cursor-pointer hover:border-gray-600 transition-colors">
-                  <input
-                    type="checkbox"
-                    checked={config.stayAwake}
-                    onChange={(e) => handleConfigChange({ stayAwake: e.target.checked })}
-                    className="rounded bg-[#161B22] border-[#30363D] text-blue-600 focus:ring-0"
-                  />
-                  <span className="text-xs text-gray-300">Stay Awake</span>
-                </label>
-
-                <label className="flex items-center gap-2 p-2 rounded bg-[#0D1117] border border-[#30363D] cursor-pointer hover:border-gray-600 transition-colors">
-                  <input
-                    type="checkbox"
-                    checked={config.alwaysOnTop}
-                    onChange={(e) => handleConfigChange({ alwaysOnTop: e.target.checked })}
-                    className="rounded bg-[#161B22] border-[#30363D] text-blue-600 focus:ring-0"
-                  />
-                  <span className="text-xs text-gray-300">Always on Top</span>
-                </label>
-
-                <label className="flex items-center gap-2 p-2 rounded bg-[#0D1117] border border-[#30363D] cursor-pointer hover:border-gray-600 transition-colors">
-                  <input
-                    type="checkbox"
-                    checked={config.showTouches}
-                    onChange={(e) => handleConfigChange({ showTouches: e.target.checked })}
-                    className="rounded bg-[#161B22] border-[#30363D] text-blue-600 focus:ring-0"
-                  />
-                  <span className="text-xs text-gray-300">Show Touches</span>
-                </label>
-
-                <label className="flex items-center gap-2 p-2 rounded bg-[#0D1117] border border-[#30363D] cursor-pointer hover:border-gray-600 transition-colors">
-                  <input
-                    type="checkbox"
-                    checked={config.readOnly}
-                    onChange={(e) => handleConfigChange({ readOnly: e.target.checked })}
-                    className="rounded bg-[#161B22] border-[#30363D] text-blue-600 focus:ring-0"
-                  />
-                  <span className="text-xs text-gray-300">Read Only</span>
-                </label>
-              </div>
-            </div>
-
-            {/* Wireless Connection Card */}
-            <div className="bg-[#161B22] rounded-xl border border-[#30363D] p-5 shadow-xl space-y-4">
-              <div className="flex items-center justify-between border-b border-[#30363D] pb-3">
-                <div className="flex items-center gap-2">
-                  <Wifi className="w-4 h-4 text-emerald-400" />
-                  <h2 className="text-xs font-bold uppercase tracking-wider text-gray-200">
-                    Wireless ADB Connection
-                  </h2>
-                </div>
-                <span className="text-[10px] text-emerald-400 font-mono">Wi-Fi TCP/IP</span>
-              </div>
-
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  handleConnectWireless(wirelessIp, Number(wirelessPort) || 5555);
-                }}
-                className="space-y-3"
-              >
-                <div>
-                  <label className="text-[11px] font-medium text-gray-400 block mb-1">
-                    Device IP & Port
-                  </label>
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      placeholder="e.g. 192.168.1.50"
-                      value={wirelessIp}
-                      onChange={(e) => setWirelessIp(e.target.value)}
-                      className="flex-1 px-3 py-2 bg-[#0D1117] border border-[#30363D] rounded-md text-xs text-gray-200 focus:outline-none focus:border-blue-500 font-mono"
-                    />
-                    <input
-                      type="text"
-                      placeholder="5555"
-                      value={wirelessPort}
-                      onChange={(e) => setWirelessPort(e.target.value)}
-                      className="w-20 px-2.5 py-2 bg-[#0D1117] border border-[#30363D] rounded-md text-xs text-gray-200 text-center focus:outline-none focus:border-blue-500 font-mono"
-                    />
-                  </div>
-                </div>
-
-                {/* Recent IPs */}
-                {recentIps.length > 0 && (
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    <span className="text-[10px] text-gray-500">Recents:</span>
-                    {recentIps.map((ip) => (
-                      <button
-                        key={ip}
-                        type="button"
-                        onClick={() => setWirelessIp(ip)}
-                        className="px-2 py-0.5 rounded bg-[#0D1117] hover:bg-[#30363D] text-[11px] font-mono text-blue-400 border border-[#30363D] transition-colors cursor-pointer"
-                      >
-                        {ip}
-                      </button>
-                    ))}
-                  </div>
-                )}
-
-                <button
-                  type="submit"
-                  disabled={isConnectingWireless || !wirelessIp.trim()}
-                  className="w-full py-2.5 px-4 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold rounded-md shadow-md shadow-emerald-950/40 transition-all disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer"
-                >
-                  {isConnectingWireless ? (
-                    <>
-                      <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                      <span>Enabling TCP/IP & Connecting...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Wifi className="w-3.5 h-3.5" />
-                      <span>Connect Wireless Device</span>
-                      <ArrowRight className="w-3.5 h-3.5" />
-                    </>
-                  )}
-                </button>
-              </form>
-
-              {/* Active wireless disconnect if currently selected is wireless */}
-              {selectedDevice?.isWireless && (
-                <div className="pt-2 border-t border-[#30363D] flex items-center justify-between">
-                  <span className="text-[11px] text-gray-400">Current wireless target</span>
-                  <button
-                    type="button"
-                    onClick={() => handleDisconnectWireless(selectedDevice.serial)}
-                    className="px-2.5 py-1 rounded bg-[#0D1117] hover:bg-rose-950/40 hover:border-rose-800/60 border border-[#30363D] text-[11px] text-rose-400 flex items-center gap-1 transition-colors"
-                  >
-                    <WifiOff className="w-3 h-3" />
-                    <span>Disconnect {selectedDevice.serial}</span>
-                  </button>
-                </div>
-              )}
-
-              {/* Quick instructions */}
-              <div className="p-3 bg-[#0D1117] rounded-lg border border-[#30363D] space-y-1 text-xs">
-                <div className="flex items-center gap-1.5 text-blue-400 font-medium text-[11px]">
-                  <HelpCircle className="w-3.5 h-3.5" />
-                  <span>How to connect wirelessly:</span>
-                </div>
-                <p className="text-[11px] text-gray-400 leading-relaxed">
-                  1. Plug in device via USB once • 2. Enter Wi-Fi IP and click Connect • 3. Unplug USB cable!
-                </p>
-              </div>
+            <div className="no-drag flex items-center gap-2">
+              <button type="button" onClick={() => fetchDevices()} className="btn btn-icon" title="Refresh devices">
+                <RotateCw className={`h-3.5 w-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
+              </button>
+              <button type="button" onClick={() => setIsWirelessModalOpen(true)} className="btn" title="Wireless ADB">
+                <Wifi className="h-3.5 w-3.5" />
+                Wireless
+              </button>
             </div>
           </div>
         </div>
+
+        <div className="page-shell">
+          <header className="page-header">
+            <div>
+              <div className="mb-2 flex items-center gap-2">
+                <span className={`status-dot ${connectedDevices.length ? 'status-success' : 'status-error'}`} />
+                <span className="label">{connectedDevices.length} connected</span>
+              </div>
+              <h1 className="page-title">Android devices</h1>
+              <p className="page-subtitle">Select a device, adjust the session, and mirror with a focused, polished workflow.</p>
+            </div>
+
+            <div className="toolbar">
+              <button type="button" onClick={() => fetchDevices()} disabled={isRefreshing} className="btn">
+                <RotateCw className={`h-3.5 w-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
+                Refresh
+              </button>
+              <button type="button" onClick={() => setIsWirelessModalOpen(true)} className="btn">
+                <Wifi className="h-3.5 w-3.5" />
+                Connect Wi‑Fi
+              </button>
+              <button
+                type="button"
+                onClick={isMirroring ? handleStopMirroring : handleStartMirroring}
+                disabled={isLoadingSession || (!selectedDevice && !isMirroring)}
+                className={isMirroring ? 'btn btn-danger' : 'btn btn-primary'}
+              >
+                {isMirroring ? <Square className="h-3.5 w-3.5 fill-current" /> : <Play className="h-3.5 w-3.5 fill-current" />}
+                {isLoadingSession ? 'Working' : isMirroring ? 'Stop mirror' : 'Mirror'}
+              </button>
+            </div>
+          </header>
+
+          <section className="workspace-grid">
+            <div className="main-column">
+              <div className="panel">
+                <div className="panel-header">
+                  <div>
+                    <h2 className="panel-title">Devices</h2>
+                    <p className="panel-subtitle">USB and wireless ADB transports</p>
+                  </div>
+                  <span className="mono caption">tcp:5037</span>
+                </div>
+
+                <div className="panel-body tight">
+                  {devices.length === 0 ? (
+                    <div className="flex min-h-[220px] flex-col items-center justify-center px-8 text-center">
+                      <Smartphone className="mb-4 h-9 w-9 text-[var(--text-muted)]" />
+                      <h3 className="text-[15px] font-semibold text-[var(--text)]">No Android devices connected</h3>
+                      <p className="mt-2 max-w-sm text-[13px] leading-6 text-[var(--text-secondary)]">
+                        Connect through USB or add a wireless ADB endpoint to start mirroring.
+                      </p>
+                      <div className="mt-4 flex items-center gap-2">
+                        <button type="button" onClick={() => fetchDevices()} className="btn">Refresh</button>
+                        <button type="button" onClick={() => setIsWirelessModalOpen(true)} className="btn btn-primary">Connect device</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="device-list">
+                      {devices.map((device) => {
+                        const isSelected = selectedDevice?.serial === device.serial;
+                        const stateClass =
+                          device.state === 'device'
+                            ? 'status-success'
+                            : device.state === 'unauthorized'
+                            ? 'status-warning'
+                            : 'status-error';
+
+                        return (
+                          <button
+                            key={device.serial}
+                            type="button"
+                            onClick={() => setSelectedDevice(device)}
+                            className={`device-row ${isSelected ? 'selected' : ''}`}
+                          >
+                            <div className="device-icon">
+                              {device.isWireless ? <Wifi className="h-4 w-4" /> : <Smartphone className="h-4 w-4" />}
+                            </div>
+                            <div className="device-name-wrap">
+                              <div className="device-name">
+                                <span className="device-name-text">{device.model}</span>
+                                {device.isMirroring && <span className="live-pill">Live</span>}
+                              </div>
+                              <div className="device-meta">
+                                <span className="mono truncate">{device.serial}</span>
+                                <span>{device.isWireless ? 'Wi‑Fi' : 'USB'}</span>
+                                {device.product && <span>{device.product}</span>}
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-3">
+                              <span className="hidden items-center gap-2 text-[12px] text-[var(--text-secondary)] sm:flex">
+                                <span className={`status-dot ${stateClass}`} />
+                                {device.state}
+                              </span>
+                              <span className={isSelected ? 'btn btn-primary pointer-events-none' : 'btn pointer-events-none'}>
+                                {isSelected ? 'Selected' : 'Select'}
+                              </span>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="panel">
+                <div className="panel-header">
+                  <div>
+                    <h2 className="panel-title">Session</h2>
+                    <p className="panel-subtitle">Primary mirroring controls</p>
+                  </div>
+                  <span className="mono caption">
+                    {config.maxSize === 0 ? 'native' : `${config.maxSize}p`} · {config.maxFps} fps
+                  </span>
+                </div>
+
+                <div className="panel-body">
+                  <div className="surface-subtle p-4">
+                    <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className={`status-dot ${selectedStatusClass}`} />
+                          <span className="text-[13px] font-semibold text-[var(--text)]">
+                            {selectedDevice ? selectedDevice.model : 'No device selected'}
+                          </span>
+                        </div>
+                        <p className="mt-2 max-w-xl text-[12px] leading-5 text-[var(--text-secondary)]">
+                          {selectedDevice
+                            ? `${selectedDevice.isWireless ? 'Wireless' : 'USB'} transport is ${selectedDevice.state}.`
+                            : 'Choose a connected Android device from the list above.'}
+                        </p>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={isMirroring ? handleStopMirroring : handleStartMirroring}
+                          disabled={isLoadingSession || (!selectedDevice && !isMirroring)}
+                          className={isMirroring ? 'btn btn-danger' : 'btn btn-primary'}
+                        >
+                          {isMirroring ? <Square className="h-3.5 w-3.5 fill-current" /> : <Play className="h-3.5 w-3.5 fill-current" />}
+                          {isLoadingSession ? 'Starting' : isMirroring ? 'Stop' : 'Start'}
+                        </button>
+                        {selectedDevice?.isWireless && (
+                          <button type="button" onClick={() => handleDisconnectWireless(selectedDevice.serial)} className="btn btn-danger">
+                            <WifiOff className="h-3.5 w-3.5" />
+                            Disconnect
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="mt-5 grid grid-cols-2 gap-3 border-t border-[var(--border)] pt-4 md:grid-cols-4">
+                      {[
+                        { label: 'Resolution', value: config.maxSize === 0 ? 'Native' : `${config.maxSize}p` },
+                        { label: 'Frame rate', value: `${config.maxFps} FPS` },
+                        { label: 'Bitrate', value: `${config.videoBitRate} Mbps` },
+                        { label: 'Codec', value: config.videoCodec.toUpperCase() },
+                      ].map((item) => (
+                        <div key={item.label}>
+                          <div className="caption">{item.label}</div>
+                          <div className="mono mt-1 text-[13px] text-[var(--text)]">{item.value}</div>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="mt-5 flex flex-wrap items-center gap-1.5 border-t border-[var(--border)] pt-4">
+                      <button type="button" onClick={() => handleTriggerAction('back')} disabled={!selectedDevice} className="btn btn-icon" title="Back">
+                        <ArrowRight className="h-3.5 w-3.5 rotate-180" />
+                      </button>
+                      <button type="button" onClick={() => handleTriggerAction('home')} disabled={!selectedDevice} className="btn btn-icon" title="Home">
+                        <Monitor className="h-3.5 w-3.5" />
+                      </button>
+                      <button type="button" onClick={() => handleTriggerAction('app_switch')} disabled={!selectedDevice} className="btn btn-icon" title="App switcher">
+                        <Layers className="h-3.5 w-3.5" />
+                      </button>
+                      <div className="mx-1 h-5 w-px bg-[var(--border)]" />
+                      <button type="button" onClick={() => handleTriggerAction('power')} disabled={!selectedDevice} className="btn btn-icon" title="Power">
+                        <Power className="h-3.5 w-3.5" />
+                      </button>
+                      <button type="button" onClick={() => handleTriggerAction('volume_up')} disabled={!selectedDevice} className="btn btn-icon" title="Volume up">
+                        <Volume2 className="h-3.5 w-3.5" />
+                      </button>
+                      <button type="button" onClick={() => handleTriggerAction('volume_down')} disabled={!selectedDevice} className="btn btn-icon" title="Volume down">
+                        <VolumeX className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <aside className="sidebar-column">
+              <div className="panel">
+                <div className="panel-header">
+                  <div>
+                    <h2 className="panel-title">Wireless</h2>
+                    <p className="panel-subtitle">ADB over TCP/IP</p>
+                  </div>
+                </div>
+                <div className="panel-body">
+                  <form
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      handleConnectWireless(wirelessIp, Number(wirelessPort) || 5555);
+                    }}
+                    className="surface-subtle p-4"
+                  >
+                    <div className="grid grid-cols-[1fr_76px] gap-2">
+                      <input
+                        type="text"
+                        placeholder="192.168.1.50"
+                        value={wirelessIp}
+                        onChange={(event) => setWirelessIp(event.target.value)}
+                        className="field mono"
+                      />
+                      <input
+                        type="text"
+                        placeholder="5555"
+                        value={wirelessPort}
+                        onChange={(event) => setWirelessPort(event.target.value)}
+                        className="field mono text-center"
+                      />
+                    </div>
+                    {recentIps.length > 0 && (
+                      <div className="mt-3 flex flex-wrap gap-1.5">
+                        {recentIps.map((ip) => (
+                          <button key={ip} type="button" onClick={() => setWirelessIp(ip)} className="btn min-h-7 px-2 mono text-[11px]">
+                            {ip}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    <button type="submit" disabled={isConnectingWireless || !wirelessIp.trim()} className="btn btn-primary mt-4 w-full">
+                      <Wifi className="h-3.5 w-3.5" />
+                      {isConnectingWireless ? 'Connecting' : 'Connect'}
+                    </button>
+                  </form>
+                </div>
+              </div>
+
+              <div className="panel">
+                <div className="panel-header">
+                  <div>
+                    <h2 className="panel-title">Mirroring</h2>
+                    <p className="panel-subtitle">Session quality and behavior</p>
+                  </div>
+                  <Sliders className="h-4 w-4 text-[var(--text-muted)]" />
+                </div>
+
+                <div className="panel-body tight">
+                  <div className="surface-subtle px-4">
+                    <div className="setting-row">
+                      <div>
+                        <div className="text-[13px] font-medium text-[var(--text)]">Resolution</div>
+                        <div className="caption">Maximum mirrored size</div>
+                      </div>
+                      <select value={config.maxSize} onChange={(event) => handleConfigChange({ maxSize: Number(event.target.value) })} className="field w-32">
+                        <option value="480">480p</option>
+                        <option value="720">720p</option>
+                        <option value="1080">1080p</option>
+                        <option value="1440">1440p</option>
+                        <option value="0">Native</option>
+                      </select>
+                    </div>
+                    <div className="setting-row">
+                      <div>
+                        <div className="text-[13px] font-medium text-[var(--text)]">Frame rate</div>
+                        <div className="caption">Upper FPS limit</div>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <input
+                          type="range"
+                          min="30"
+                          max="120"
+                          step="10"
+                          value={config.maxFps}
+                          onChange={(event) => handleConfigChange({ maxFps: Number(event.target.value) })}
+                          className="w-28 accent-[var(--accent)]"
+                        />
+                        <span className="mono w-12 text-right text-[12px] text-[var(--text-secondary)]">{config.maxFps}</span>
+                      </div>
+                    </div>
+                    <div className="setting-row">
+                      <div>
+                        <div className="text-[13px] font-medium text-[var(--text)]">Audio</div>
+                        <div className="caption">Source forwarded by scrcpy</div>
+                      </div>
+                      <select value={config.audioSource} onChange={(event) => handleConfigChange({ audioSource: event.target.value as any })} className="field w-36">
+                        <option value="internal">Internal</option>
+                        <option value="mic">Microphone</option>
+                        <option value="disabled">Disabled</option>
+                      </select>
+                    </div>
+                    <div className="setting-row">
+                      <div>
+                        <div className="text-[13px] font-medium text-[var(--text)]">Video bitrate</div>
+                        <div className="caption">Encoder target rate</div>
+                      </div>
+                      <select value={config.videoBitRate} onChange={(event) => handleConfigChange({ videoBitRate: Number(event.target.value) })} className="field w-32">
+                        <option value="4">4 Mbps</option>
+                        <option value="8">8 Mbps</option>
+                        <option value="16">16 Mbps</option>
+                        <option value="32">32 Mbps</option>
+                      </select>
+                    </div>
+                    <div className="setting-row">
+                      <div>
+                        <div className="text-[13px] font-medium text-[var(--text)]">Codec</div>
+                        <div className="caption">Video encoder preference</div>
+                      </div>
+                      <select value={config.videoCodec} onChange={(event) => handleConfigChange({ videoCodec: event.target.value as any })} className="field w-32">
+                        <option value="h264">H.264</option>
+                        <option value="h265">H.265</option>
+                        <option value="av1">AV1</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="panel">
+                <div className="panel-header">
+                  <div>
+                    <h2 className="panel-title">Advanced</h2>
+                    <p className="panel-subtitle">Optional scrcpy flags</p>
+                  </div>
+                </div>
+                <div className="panel-body tight">
+                  <div className="surface-subtle px-4">
+                    {[
+                      { key: 'turnScreenOff', label: 'Turn screen off', desc: 'Keep physical display dark', value: config.turnScreenOff, icon: EyeOff },
+                      { key: 'stayAwake', label: 'Stay awake', desc: 'Prevent sleep during session', value: config.stayAwake, icon: Power },
+                      { key: 'alwaysOnTop', label: 'Always on top', desc: 'Keep mirror window above others', value: config.alwaysOnTop, icon: Layers },
+                      { key: 'showTouches', label: 'Show touches', desc: 'Display touch indicators', value: config.showTouches, icon: Radio },
+                      { key: 'readOnly', label: 'Read only', desc: 'Disable input forwarding', value: config.readOnly, icon: Eye },
+                      { key: 'record', label: 'Record session', desc: 'Save session to MP4', value: config.record, icon: Video },
+                    ].map((item) => {
+                      const Icon = item.icon;
+                      return (
+                        <label key={item.key} className="setting-row">
+                          <div className="flex items-center gap-3">
+                            <Icon className="h-4 w-4 text-[var(--text-muted)]" />
+                            <div>
+                              <div className="text-[13px] font-medium text-[var(--text)]">{item.label}</div>
+                              <div className="caption">{item.desc}</div>
+                            </div>
+                          </div>
+                          <span className="toggle">
+                            <input
+                              type="checkbox"
+                              checked={item.value}
+                              onChange={(event) => handleConfigChange({ [item.key]: event.target.checked } as Partial<ScrcpyConfig>)}
+                            />
+                            <span />
+                          </span>
+                        </label>
+                      );
+                    })}
+                    {config.record && (
+                      <div className="flex items-center gap-2 border-t border-[var(--border)] py-3">
+                        <input
+                          type="text"
+                          placeholder="recording name"
+                          value={config.recordFileName}
+                          onChange={(event) => handleConfigChange({ recordFileName: event.target.value })}
+                          className="field mono min-w-0 flex-1"
+                        />
+                        <button type="button" onClick={handleOpenRecordings} className="btn btn-icon" title="Open recordings folder">
+                          <FolderOpen className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div className="panel">
+                <div className="panel-header">
+                  <div>
+                    <h2 className="panel-title">Command</h2>
+                  </div>
+                  <button type="button" onClick={handleCopyCommand} className="btn min-h-7 px-2.5">
+                    {copiedCommand ? <Check className="h-3.5 w-3.5 text-[var(--success)]" /> : <Copy className="h-3.5 w-3.5" />}
+                    {copiedCommand ? 'Copied' : 'Copy'}
+                  </button>
+                </div>
+                <div className="panel-body">
+                  <div className="rounded-[10px] border border-[var(--border)] bg-[#0d0f12] p-3">
+                    <code className="mono block break-all text-[11px] leading-5 text-[var(--text-secondary)]">{generatedCommand}</code>
+                    <input
+                      type="text"
+                      placeholder="Additional scrcpy arguments"
+                      value={config.customArgs}
+                      onChange={(event) => handleConfigChange({ customArgs: event.target.value })}
+                      className="field mono mt-3 w-full"
+                    />
+                  </div>
+                </div>
+              </div>
+            </aside>
+          </section>
+        </div>
+
+        <TerminalLogs
+          logs={logs}
+          onClearLogs={handleClearLogs}
+          isOpen={isTerminalOpen}
+          onToggle={() => setIsTerminalOpen((prev) => !prev)}
+        />
       </main>
 
-      {/* Terminal Logs Bottom Drawer */}
-      <TerminalLogs
-        logs={logs}
-        onClearLogs={handleClearLogs}
-        isOpen={isTerminalOpen}
-        onToggle={() => setIsTerminalOpen((prev) => !prev)}
-      />
-
-      {/* Wireless Modal (Triggerable from Header) */}
       <WirelessModal
         isOpen={isWirelessModalOpen}
         onClose={() => setIsWirelessModalOpen(false)}
@@ -892,12 +819,10 @@ export default function App() {
         isLoading={isConnectingWireless}
       />
 
-      {/* Electron Codebase Inspector Modal */}
       <CodeViewerModal
         isOpen={isCodeViewerOpen}
         onClose={() => setIsCodeViewerOpen(false)}
       />
-      {/* Keyboard Shortcuts Cheat Sheet */}
       <ShortcutsModal
         isOpen={isShortcutsModalOpen}
         onClose={() => setIsShortcutsModalOpen(false)}

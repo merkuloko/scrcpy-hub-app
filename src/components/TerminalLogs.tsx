@@ -1,5 +1,5 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { Terminal, Trash2, Copy, Check, ChevronDown, ChevronUp, Search } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { Check, ChevronDown, ChevronUp, Copy, Search, Terminal, Trash2 } from 'lucide-react';
 import { LogEntry } from '../types';
 
 interface TerminalLogsProps {
@@ -34,7 +34,7 @@ export const TerminalLogs: React.FC<TerminalLogsProps> = ({
 
   const handleCopyLogs = () => {
     const text = filteredLogs
-      .map((l) => `[${new Date(l.timestamp).toLocaleTimeString()}] [${l.level.toUpperCase()}] ${l.serial ? `(${l.serial}) ` : ''}${l.message}`)
+      .map((log) => `[${new Date(log.timestamp).toLocaleTimeString()}] [${log.level.toUpperCase()}] ${log.serial ? `(${log.serial}) ` : ''}${log.message}`)
       .join('\n');
     navigator.clipboard.writeText(text);
     setCopied(true);
@@ -42,42 +42,40 @@ export const TerminalLogs: React.FC<TerminalLogsProps> = ({
   };
 
   return (
-    <div className="border-t border-[#30363D] bg-[#0F1115] transition-all">
-      {/* Header Bar */}
-      <div className="px-6 py-2.5 flex items-center justify-between border-b border-[#30363D] select-none bg-[#161B22]">
-        <div
+    <section className="mt-auto border-t border-[var(--border)] bg-[rgba(16,17,19,0.78)] backdrop-blur-xl">
+      <div className="flex min-h-11 items-center justify-between gap-3 px-5">
+        <button
+          type="button"
           onClick={onToggle}
-          className="flex items-center gap-2 text-xs font-semibold text-[#E2E8F0] cursor-pointer hover:text-white transition-colors"
+          className="flex items-center gap-2 text-[12px] font-semibold text-[var(--text-secondary)] transition hover:text-[var(--text)]"
         >
-          <Terminal className="w-4 h-4 text-blue-400" />
-          <span>Console & Execution Logs</span>
-          <span className="text-[10px] px-2 py-0.5 rounded bg-[#0D1117] border border-[#30363D] text-blue-400 font-mono">
-            {logs.length} entries
+          <Terminal className="h-4 w-4 text-[var(--text-muted)]" />
+          Logs
+          <span className="mono rounded-[6px] bg-white/[0.045] px-1.5 py-0.5 text-[10px] text-[var(--text-muted)]">
+            {logs.length}
           </span>
-          {isOpen ? <ChevronDown className="w-3.5 h-3.5 text-gray-400" /> : <ChevronUp className="w-3.5 h-3.5 text-gray-400" />}
-        </div>
+          {isOpen ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronUp className="h-3.5 w-3.5" />}
+        </button>
 
         {isOpen && (
-          <div className="flex items-center gap-2">
-            {/* Filter Search */}
-            <div className="relative flex items-center">
-              <Search className="w-3 h-3 text-gray-500 absolute left-2.5 pointer-events-none" />
+          <div className="flex min-w-0 items-center gap-2">
+            <div className="relative hidden sm:block">
+              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3 w-3 -translate-y-1/2 text-[var(--text-muted)]" />
               <input
                 type="text"
-                placeholder="Filter logs..."
+                placeholder="Filter"
                 value={filterText}
-                onChange={(e) => setFilterText(e.target.value)}
-                className="pl-7 pr-2 py-1 bg-[#0D1117] border border-[#30363D] rounded-md text-[11px] text-[#E2E8F0] focus:outline-none focus:border-blue-500 w-36 sm:w-48 font-mono"
+                onChange={(event) => setFilterText(event.target.value)}
+                className="field mono h-7 min-h-7 w-44 pl-7 text-[11px]"
               />
             </div>
 
-            {/* Level Selector */}
             <select
               value={selectedLevel}
-              onChange={(e) => setSelectedLevel(e.target.value)}
-              className="px-2 py-1 bg-[#0D1117] border border-[#30363D] rounded-md text-[11px] text-gray-300 focus:outline-none focus:border-blue-500 font-mono cursor-pointer"
+              onChange={(event) => setSelectedLevel(event.target.value)}
+              className="field mono h-7 min-h-7 w-28 text-[11px]"
             >
-              <option value="all">All Levels</option>
+              <option value="all">All</option>
               <option value="info">Info</option>
               <option value="stdout">Stdout</option>
               <option value="stderr">Stderr</option>
@@ -85,67 +83,43 @@ export const TerminalLogs: React.FC<TerminalLogsProps> = ({
               <option value="warn">Warn</option>
             </select>
 
-            <button
-              onClick={handleCopyLogs}
-              className="p-1 px-2.5 rounded-md bg-[#0D1117] hover:bg-[#30363D] border border-[#30363D] text-gray-300 text-[11px] font-medium transition-colors flex items-center gap-1"
-              title="Copy visible logs to clipboard"
-            >
-              {copied ? <Check className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3 text-gray-400" />}
-              <span className="hidden sm:inline">{copied ? 'Copied' : 'Copy'}</span>
+            <button type="button" onClick={handleCopyLogs} className="btn btn-icon h-7 min-h-7 w-7" title="Copy visible logs">
+              {copied ? <Check className="h-3.5 w-3.5 text-[var(--success)]" /> : <Copy className="h-3.5 w-3.5" />}
             </button>
 
-            <button
-              onClick={onClearLogs}
-              className="p-1 px-2.5 rounded-md bg-[#0D1117] hover:bg-rose-950/40 hover:border-rose-800/60 border border-[#30363D] text-gray-400 hover:text-rose-300 text-[11px] font-medium transition-colors flex items-center gap-1"
-              title="Clear all logs"
-            >
-              <Trash2 className="w-3 h-3" />
-              <span className="hidden sm:inline">Clear</span>
+            <button type="button" onClick={onClearLogs} className="btn btn-icon h-7 min-h-7 w-7" title="Clear logs">
+              <Trash2 className="h-3.5 w-3.5" />
             </button>
           </div>
         )}
       </div>
 
-      {/* Log Output Area */}
       {isOpen && (
-        <div className="h-52 overflow-y-auto p-4 font-mono text-[11px] leading-relaxed space-y-1 bg-[#090D11] select-text">
+        <div className="scrollbar-soft h-56 overflow-y-auto border-t border-[var(--border)] bg-[#0c0d0f] px-5 py-3 font-mono text-[11px] leading-5">
           {filteredLogs.length === 0 ? (
-            <div className="text-gray-600 italic text-center py-8">
-              No console logs matching filter. Start a session to view live ADB / Scrcpy stream.
+            <div className="flex h-full items-center justify-center text-[12px] text-[var(--text-muted)]">
+              No matching logs.
             </div>
           ) : (
-            filteredLogs.map((log, idx) => {
+            filteredLogs.map((log, index) => {
               const time = new Date(log.timestamp).toLocaleTimeString();
-              let levelColor = 'text-gray-300';
-              let badgeColor = 'bg-[#161B22] text-gray-400 border-[#30363D]';
-
-              if (log.level === 'info') {
-                levelColor = 'text-blue-300';
-                badgeColor = 'bg-blue-950/60 text-blue-400 border-blue-800/50';
-              } else if (log.level === 'warn') {
-                levelColor = 'text-yellow-300';
-                badgeColor = 'bg-yellow-950/60 text-yellow-400 border-yellow-800/50';
-              } else if (log.level === 'error') {
-                levelColor = 'text-rose-300';
-                badgeColor = 'bg-rose-950/60 text-rose-400 border-rose-800/50';
-              } else if (log.level === 'stdout') {
-                levelColor = 'text-emerald-300';
-                badgeColor = 'bg-emerald-950/60 text-emerald-400 border-emerald-800/50';
-              } else if (log.level === 'stderr') {
-                levelColor = 'text-rose-400';
-                badgeColor = 'bg-rose-950/80 text-rose-300 border-rose-800';
-              }
+              const levelClass =
+                log.level === 'error' || log.level === 'stderr'
+                  ? 'text-[var(--error)]'
+                  : log.level === 'warn'
+                  ? 'text-[var(--warning)]'
+                  : log.level === 'stdout'
+                  ? 'text-[var(--success)]'
+                  : 'text-[var(--accent)]';
 
               return (
-                <div key={idx} className="flex items-start gap-2.5 hover:bg-[#161B22]/50 px-2 py-0.5 rounded">
-                  <span className="text-gray-500 select-none text-[10px]">{time}</span>
-                  <span className={`text-[9px] px-1 rounded uppercase font-semibold border ${badgeColor}`}>
-                    {log.level}
+                <div key={`${log.timestamp}-${index}`} className="grid grid-cols-[74px_54px_minmax(0,1fr)] gap-3 rounded-[6px] px-2 py-0.5 text-[var(--text-secondary)] hover:bg-white/[0.035]">
+                  <span className="text-[var(--text-muted)]">{time}</span>
+                  <span className={`uppercase ${levelClass}`}>{log.level}</span>
+                  <span className="min-w-0 break-all">
+                    {log.serial && <span className="mr-2 text-[var(--text-muted)]">[{log.serial}]</span>}
+                    {log.message}
                   </span>
-                  {log.serial && (
-                    <span className="text-[10px] text-purple-400 font-mono">[{log.serial}]</span>
-                  )}
-                  <span className={`flex-1 break-all ${levelColor}`}>{log.message}</span>
                 </div>
               );
             })
@@ -153,6 +127,6 @@ export const TerminalLogs: React.FC<TerminalLogsProps> = ({
           <div ref={logEndRef} />
         </div>
       )}
-    </div>
+    </section>
   );
 };

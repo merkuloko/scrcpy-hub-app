@@ -1,5 +1,15 @@
 import React from 'react';
-import { RefreshCw, Wifi, Usb, Terminal, Code2, Monitor, Radio, Keyboard } from 'lucide-react';
+import {
+  Code2,
+  Keyboard,
+  Monitor,
+  PanelLeft,
+  RefreshCw,
+  Smartphone,
+  Terminal,
+  Usb,
+  Wifi,
+} from 'lucide-react';
 import { Device } from '../types';
 import { isElectron } from '../lib/api';
 
@@ -30,132 +40,140 @@ export const Header: React.FC<HeaderProps> = ({
   isMirroringActive,
   onOpenShortcuts,
 }) => {
+  const connectedCount = devices.filter((device) => device.state === 'device').length;
+
   return (
-    <header className="border-b border-[#30363D] bg-[#161B22] sticky top-0 z-30 select-none">
-      {/* macOS Native Titlebar Area */}
-      <div className="flex items-center justify-between px-6 py-3.5">
-        {/* Left: Window Traffic Lights & Brand */}
-        <div className="flex items-center gap-10">
-          <div className="flex items-center gap-2">
-          </div>
+    <aside className="mac-sidebar window-drag-region hidden w-[240px] shrink-0 flex-col px-3 pb-4 pt-4 lg:flex">
+      <div className="h-8" />
 
-          <div className="h-4 w-px bg-[#30363D] hidden sm:block" />
-
-          <div className="flex items-center gap-3">
-            <div className="w-7 h-7 rounded-lg bg-blue-600/20 border border-blue-500/30 flex items-center justify-center text-blue-400">
-              <Monitor className="w-4 h-4" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-sm font-bold tracking-tight text-[#E2E8F0]">Scrcpy Hub</h1>
-                <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#0D1117] border border-[#30363D] text-blue-400 font-mono">
-                  {isElectron ? 'Electron' : 'v2.4 GUI'}
-                </span>
-                {isMirroringActive && (
-                  <span className="flex items-center gap-1.5 text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 font-medium">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                    LIVE
-                  </span>
-                )}
-              </div>
-            </div>
+      <div className="no-drag flex items-center gap-2 px-2 py-2">
+        <div className="flex h-8 w-8 items-center justify-center rounded-[10px] border border-[var(--border)] bg-white/[0.04] text-[var(--accent)]">
+          <Monitor className="h-4 w-4" />
+        </div>
+        <div className="min-w-0">
+          <div className="text-[13px] font-semibold leading-4 text-[var(--text)]">Scrcpy Hub</div>
+          <div className="mt-0.5 text-[11px] text-[var(--text-muted)]">
+            {isElectron ? 'macOS utility' : 'web fallback'}
           </div>
         </div>
+      </div>
 
-        {/* Center: Device Selector & Scanner */}
-        <div className="flex items-center gap-2.5 max-w-md w-full justify-center">
-          <div className="relative flex-1 max-w-xs">
-            <div className="relative flex items-center">
-              <div className="absolute left-3 text-slate-400 pointer-events-none">
-                {selectedDevice?.isWireless ? (
-                  <Wifi className="w-3.5 h-3.5 text-blue-400" />
-                ) : (
-                  <Usb className="w-3.5 h-3.5 text-emerald-400" />
-                )}
-              </div>
-              <select
-                id="device-selector"
-                value={selectedDevice?.serial || ''}
-                onChange={(e) => {
-                  const target = devices.find((d) => d.serial === e.target.value);
-                  if (target) onSelectDevice(target);
-                }}
-                className="w-full pl-8 pr-8 py-1.5 bg-[#0D1117] hover:bg-[#111620] border border-[#30363D] rounded-md text-xs font-medium text-[#E2E8F0] focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 transition-all cursor-pointer truncate"
-              >
-                {devices.length === 0 ? (
-                  <option value="" disabled>No devices detected</option>
-                ) : (
-                  devices.map((dev) => (
-                    <option key={dev.serial} value={dev.serial}>
-                      {dev.model} ({dev.isWireless ? 'Wi-Fi' : 'USB'} • {dev.serial})
-                    </option>
-                  ))
-                )}
-              </select>
-              <div className="absolute right-3 pointer-events-none text-[10px] text-gray-500">
-                ▾
-              </div>
-            </div>
-          </div>
+      <nav className="no-drag mt-6 space-y-1">
+        <button className="flex w-full items-center gap-2.5 rounded-[9px] bg-white/[0.06] px-2.5 py-2 text-left text-[12px] font-medium text-[var(--text)] ring-1 ring-inset ring-white/[0.04]">
+          <Smartphone className="h-4 w-4 text-[var(--accent)]" />
+          Devices
+        </button>
+        <button className="flex w-full items-center gap-2.5 rounded-[9px] px-2.5 py-2 text-left text-[12px] font-medium text-[var(--text-muted)] transition hover:bg-white/[0.03] hover:text-[var(--text-secondary)]">
+          <Monitor className="h-4 w-4" />
+          Mirror
+        </button>
+        <button
+          type="button"
+          onClick={onToggleTerminal}
+          className={`flex w-full items-center gap-2.5 rounded-[9px] px-2.5 py-2 text-left text-[12px] font-medium transition ${
+            isTerminalOpen
+              ? 'bg-white/[0.06] text-[var(--text)] ring-1 ring-inset ring-white/[0.04]'
+              : 'text-[var(--text-muted)] hover:bg-white/[0.03] hover:text-[var(--text-secondary)]'
+          }`}
+        >
+          <Terminal className="h-4 w-4" />
+          Logs
+        </button>
+      </nav>
 
+      <div className="no-drag mt-6 border-t border-[var(--border)] pt-4">
+        <div className="mb-2 flex items-center justify-between px-2">
+          <span className="label">Selected device</span>
           <button
             id="refresh-devices-btn"
+            type="button"
             onClick={onRefresh}
             disabled={isRefreshing}
             title="Scan for connected ADB devices"
-            className="p-2 bg-[#0D1117] hover:bg-[#30363D] active:scale-95 border border-[#30363D] rounded-md text-gray-300 hover:text-white transition-colors disabled:opacity-50"
+            className="btn btn-icon h-7 min-h-7 w-7"
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin text-blue-400' : 'text-blue-400'}`} />
-          </button>
-
-          <button
-            id="wireless-pair-btn"
-            onClick={onOpenWireless}
-            title="Wireless ADB Pair / Connect"
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-[#0D1117] hover:bg-[#30363D] border border-[#30363D] rounded-md text-xs font-medium text-gray-300 hover:text-white transition-colors"
-          >
-            <Wifi className="w-3.5 h-3.5 text-blue-400" />
-            <span className="hidden sm:inline">Wireless</span>
+            <RefreshCw className={`h-3.5 w-3.5 ${isRefreshing ? 'animate-spin text-[var(--accent)]' : ''}`} />
           </button>
         </div>
 
-        {/* Right: Tools & Utilities */}
-        <div className="flex items-center gap-2">
-          <button
-            id="toggle-terminal-btn"
-            onClick={onToggleTerminal}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium border transition-colors ${
-              isTerminalOpen
-                ? 'bg-[#30363D] text-blue-400 border-[#30363D]'
-                : 'bg-[#0D1117] text-gray-400 border-[#30363D] hover:text-gray-200 hover:bg-[#30363D]'
-            }`}
-            title="Toggle Console Output"
+        <div className="relative">
+          <select
+            id="device-selector"
+            value={selectedDevice?.serial || ''}
+            onChange={(event) => {
+              const target = devices.find((device) => device.serial === event.target.value);
+              if (target) onSelectDevice(target);
+            }}
+            className="field w-full appearance-none pl-9 pr-8"
           >
-            <Terminal className="w-3.5 h-3.5" />
-            <span className="hidden md:inline">Logs</span>
-          </button>
+            {devices.length === 0 ? (
+              <option value="" disabled>No devices detected</option>
+            ) : (
+              devices.map((device) => (
+                <option key={device.serial} value={device.serial}>
+                  {device.model} ({device.isWireless ? 'Wi-Fi' : 'USB'})
+                </option>
+              ))
+            )}
+          </select>
+          <div className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]">
+            {selectedDevice?.isWireless ? <Wifi className="h-3.5 w-3.5" /> : <Usb className="h-3.5 w-3.5" />}
+          </div>
+          <div className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-[var(--text-muted)]">
+            v
+          </div>
+        </div>
 
-          <button
-            id="view-codebase-btn"
-            onClick={onOpenCodeViewer}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-[#0D1117] hover:bg-[#30363D] text-gray-400 hover:text-gray-200 border border-[#30363D] rounded-md text-xs font-medium transition-colors"
-            title="Inspect Electron Files (main.js, preload.cjs, package.json)"
-          >
-            <Code2 className="w-3.5 h-3.5" />
-            <span className="hidden lg:inline">Electron Files</span>
-          </button>
-
-          <button
-            id="open-shortcuts-btn"
-            onClick={onOpenShortcuts}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-[#0D1117] hover:bg-[#30363D] text-gray-400 hover:text-gray-200 border border-[#30363D] rounded-md text-xs font-medium transition-colors"
-            title="Keyboard Shortcuts Cheat Sheet"
-          >
-            <Keyboard className="w-3.5 h-3.5" />
-            <span className="hidden lg:inline">Shortcuts</span>
-          </button>
+        <div className="mt-3 rounded-[10px] border border-[var(--border)] bg-white/[0.025] p-3">
+          <div className="flex items-center justify-between">
+            <span className="caption">Connected</span>
+            <span className="mono text-[12px] text-[var(--text-secondary)]">{connectedCount}</span>
+          </div>
+          <div className="mt-2 flex items-center gap-2">
+            <span className={`status-dot ${isMirroringActive ? 'status-success' : connectedCount ? 'status-warning' : 'status-error'}`} />
+            <span className="text-[12px] text-[var(--text-secondary)]">
+              {isMirroringActive ? 'Mirroring active' : connectedCount ? 'Ready' : 'No hardware'}
+            </span>
+          </div>
         </div>
       </div>
-    </header>
+
+      <div className="no-drag mt-auto space-y-1 border-t border-[var(--border)] pt-4">
+        <button
+          id="wireless-pair-btn"
+          type="button"
+          onClick={onOpenWireless}
+          className="flex w-full items-center gap-2.5 rounded-[9px] px-2.5 py-2 text-left text-[12px] font-medium text-[var(--text-muted)] transition hover:bg-white/[0.03] hover:text-[var(--text-secondary)]"
+          title="Wireless ADB Pair / Connect"
+        >
+          <Wifi className="h-4 w-4" />
+          Wireless
+        </button>
+        <button
+          id="view-codebase-btn"
+          type="button"
+          onClick={onOpenCodeViewer}
+          className="flex w-full items-center gap-2.5 rounded-[9px] px-2.5 py-2 text-left text-[12px] font-medium text-[var(--text-muted)] transition hover:bg-white/[0.03] hover:text-[var(--text-secondary)]"
+          title="Inspect Electron Files"
+        >
+          <Code2 className="h-4 w-4" />
+          Electron Files
+        </button>
+        <button
+          id="open-shortcuts-btn"
+          type="button"
+          onClick={onOpenShortcuts}
+          className="flex w-full items-center gap-2.5 rounded-[9px] px-2.5 py-2 text-left text-[12px] font-medium text-[var(--text-muted)] transition hover:bg-white/[0.03] hover:text-[var(--text-secondary)]"
+          title="Keyboard Shortcuts"
+        >
+          <Keyboard className="h-4 w-4" />
+          Shortcuts
+        </button>
+        <div className="flex items-center gap-2 px-2.5 pt-3 text-[11px] text-[var(--text-muted)]">
+          <PanelLeft className="h-3.5 w-3.5" />
+          <span>ADB 5037</span>
+        </div>
+      </div>
+    </aside>
   );
 };
