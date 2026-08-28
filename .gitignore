@@ -20,7 +20,9 @@ out/
 *.swp
 *.swo
 *.swn
-.DS_Store
+*.sublime-project
+*.sublime-workspace
+.history/
 
 # Logs and Coverage
 logs
@@ -29,6 +31,7 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 lerna-debug.log*
+.pnpm-debug.log*
 coverage/
 .nyc_output/
 
@@ -41,6 +44,12 @@ coverage/
 !.env.example
 
 # OS specific
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
 Thumbs.db
 db.lock
 desktop.ini
