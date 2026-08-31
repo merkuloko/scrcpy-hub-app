@@ -42,6 +42,9 @@ function isAdbDaemonHealthy() {
 }
 
 async function ensureAdbServer(adbPath) {
+  if (!adbPath) {
+    throw new Error('ADB is unavailable: no approved absolute binary path was found');
+  }
   if (await isAdbDaemonHealthy()) return;
   if (adbStartupPromise) return adbStartupPromise;
 

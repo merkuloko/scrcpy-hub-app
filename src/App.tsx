@@ -374,11 +374,7 @@ export default function App() {
 
       <main className="main-content scrollbar-soft">
         <div className="window-drag-region sticky top-0 z-20 border-b border-[var(--border)] bg-[rgba(13,15,18,0.8)] px-5 py-3 backdrop-blur-xl lg:hidden">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-[14px] font-semibold text-[var(--text)]">Scrcpy Hub</h1>
-              <p className="caption">Android mirroring utility</p>
-            </div>
+          <div className="flex items-center justify-end">
             <div className="no-drag flex items-center gap-2">
               <button type="button" onClick={() => fetchDevices()} className="btn btn-icon" title="Refresh devices">
                 <RotateCw className={`h-3.5 w-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />

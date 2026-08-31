@@ -138,6 +138,8 @@ ipcMain.handle('get-devices', async () => {
 });
 
 ipcMain.handle('start-scrcpy', async (event, config) => {
+  if (!scrcpyPath) return { success: false, error: 'scrcpy is unavailable: no approved absolute binary path was found' };
+
   const {
     serial, maxSize = 1080, maxFps = 60, audioSource = 'internal',
     turnScreenOff = false, stayAwake = false, alwaysOnTop = false,

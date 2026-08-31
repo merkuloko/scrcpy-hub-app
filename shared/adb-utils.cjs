@@ -26,8 +26,43 @@ function normalizePort(value) {
 
 function parseCustomArgs(value) {
   if (typeof value !== 'string' || !value.trim()) return [];
-  // Basic split by space, avoiding shell execution
-  return value.trim().split(/\s+/).filter(arg => arg.length > 0);
+
+  const args = [];
+  let current = '';
+  let quote = null;
+  let escaping = false;
+  let hasValue = false;
+
+  for (const character of value.trim()) {
+    if (escaping) {
+      current += character;
+      escaping = false;
+      hasValue = true;
+    } else if (character === '\\') {
+      escaping = true;
+      hasValue = true;
+    } else if (quote) {
+      if (character === quote) quote = null;
+      else current += character;
+      hasValue = true;
+    } else if (character === '"' || character === "'") {
+      quote = character;
+      hasValue = true;
+    } else if (/\s/.test(character)) {
+      if (hasValue) {
+        args.push(current);
+        current = '';
+        hasValue = false;
+      }
+    } else {
+      current += character;
+      hasValue = true;
+    }
+  }
+
+  if (escaping) current += '\\';
+  if (hasValue) args.push(current);
+  return args;
 }
 
 module.exports = {

@@ -84,6 +84,14 @@ app.get('/api/health', (req, res) => {
 
 // Binary check API
 app.get('/api/check-binaries', (req, res) => {
+  if (!adbPath || !scrcpyPath) {
+    res.json({
+      adb: { available: Boolean(adbPath), version: adbPath ? 'checking' : 'ADB unavailable' },
+      scrcpy: { available: Boolean(scrcpyPath), version: scrcpyPath ? 'checking' : 'scrcpy unavailable' },
+    });
+    return;
+  }
+
   execFile(adbPath, ['--version'], (adbErr, adbOut) => {
     execFile(scrcpyPath, ['--version'], (scrcpyErr, scrcpyOut) => {
       res.json({
@@ -161,6 +169,10 @@ app.get('/api/devices', (req, res) => {
 
 // Start Scrcpy Mirroring Session API
 app.post('/api/start-scrcpy', (req, res) => {
+  if (!scrcpyPath) {
+    return res.status(503).json({ success: false, error: 'scrcpy is unavailable: no approved absolute binary path was found' });
+  }
+
   const config = req.body || {};
   const {
     serial,
