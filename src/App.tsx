@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Header } from './components/Header';
 import { TerminalLogs } from './components/TerminalLogs';
 import { WirelessModal } from './components/WirelessModal';
@@ -101,13 +101,13 @@ export default function App() {
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [logs, setLogs] = useState<LogEntry[]>([]);
 
-  const showNotification = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
+  const showNotification = useCallback((message: string, type: 'success' | 'error' | 'info' = 'info') => {
     setNotification({ type, message });
     setTimeout(() => setNotification(null), 4000);
-  };
+  }, []);
 
   // Scan for connected devices
-  const fetchDevices = async (silently = false) => {
+  const fetchDevices = useCallback(async (silently = false) => {
     if (!silently) setIsRefreshing(true);
     try {
       const res = await apiClient.getDevices();
@@ -130,7 +130,7 @@ export default function App() {
     } finally {
       if (!silently) setIsRefreshing(false);
     }
-  };
+  }, [showNotification]);
 
   // Initial mount & log listeners
   useEffect(() => {
@@ -189,9 +189,9 @@ export default function App() {
   }, [selectedDevice]);
 
   // Partial config updater
-  const handleConfigChange = (newConfig: Partial<ScrcpyConfig>) => {
+  const handleConfigChange = useCallback((newConfig: Partial<ScrcpyConfig>) => {
     setConfig((prev) => ({ ...prev, ...newConfig }));
-  };
+  }, []);
 
   // Compute live scrcpy command line
   const generatedCommand = useMemo(() => {
@@ -219,7 +219,7 @@ export default function App() {
   }, [config]);
 
   // Start Scrcpy Mirroring
-  const handleStartMirroring = async () => {
+  const handleStartMirroring = useCallback(async () => {
     if (!selectedDevice) {
       showNotification('Please select a connected device first', 'error');
       return;
@@ -244,10 +244,10 @@ export default function App() {
     } finally {
       setIsLoadingSession(false);
     }
-  };
+  }, [config, fetchDevices, selectedDevice, showNotification]);
 
   // Stop Scrcpy Mirroring
-  const handleStopMirroring = async () => {
+  const handleStopMirroring = useCallback(async () => {
     setIsLoadingSession(true);
     try {
       const res = await apiClient.stopScrcpy(selectedDevice?.serial);
@@ -263,10 +263,10 @@ export default function App() {
     } finally {
       setIsLoadingSession(false);
     }
-  };
+  }, [fetchDevices, selectedDevice?.serial, showNotification]);
 
   // Connect Wireless Device
-  const handleConnectWireless = async (ip: string, port = 5555) => {
+  const handleConnectWireless = useCallback(async (ip: string, port = 5555) => {
     if (!ip.trim()) {
       showNotification('Please enter a valid IP address', 'error');
       return;
@@ -289,9 +289,9 @@ export default function App() {
     } finally {
       setIsConnectingWireless(false);
     }
-  };
+  }, [fetchDevices, recentIps, showNotification]);
 
-  const handleDisconnectWireless = async (serial: string) => {
+  const handleDisconnectWireless = useCallback(async (serial: string) => {
     try {
       const res = await apiClient.disconnectWireless(serial);
       if (res.success) {
@@ -303,50 +303,50 @@ export default function App() {
     } catch (err: any) {
       showNotification(err.message, 'error');
     }
-  };
+  }, [fetchDevices, showNotification]);
 
   // Trigger Device Hardware Key / Action
-  const handleTriggerAction = async (action: string) => {
+  const handleTriggerAction = useCallback(async (action: string) => {
     if (!selectedDevice) return;
     await apiClient.triggerDeviceAction(selectedDevice.serial, action);
     showNotification(`Sent key event: ${action}`, 'info');
-  };
+  }, [selectedDevice, showNotification]);
 
-  const handleCopyCommand = () => {
+  const handleCopyCommand = useCallback(() => {
     navigator.clipboard.writeText(generatedCommand);
     setCopiedCommand(true);
     setTimeout(() => setCopiedCommand(false), 2000);
     showNotification('Command copied to clipboard', 'info');
-  };
+  }, [generatedCommand, showNotification]);
 
-  const handleOpenRecordings = async () => {
+  const handleOpenRecordings = useCallback(async () => {
     const res = await apiClient.openRecordingsFolder();
     if (res.success) {
       showNotification(`Opened recordings: ${res.path}`, 'info');
     } else {
       showNotification(res.error || 'Could not open recordings directory', 'error');
     }
-  };
+  }, [showNotification]);
 
-  const handleClearLogs = async () => {
+  const handleClearLogs = useCallback(async () => {
     await apiClient.clearLogs();
     setLogs([]);
-  };
+  }, []);
 
-  const handleCloseOnboarding = () => {
+  const handleCloseOnboarding = useCallback(() => {
     localStorage.setItem('scrcpy-hub-onboarding-complete', 'true');
     setShowOnboarding(false);
-  };
+  }, []);
 
-  const connectedDevices = devices.filter((device) => device.state === 'device');
-  const selectedStatusClass = isMirroring
+  const connectedDevices = useMemo(() => devices.filter((device) => device.state === 'device'), [devices]);
+  const selectedStatusClass = useMemo(() => isMirroring
     ? 'status-success'
     : selectedDevice?.state === 'device'
     ? 'status-warning'
-    : 'status-error';
+    : 'status-error', [isMirroring, selectedDevice]);
 
   return (
-    <div className="app-shell flex overflow-hidden">
+    <div className="app-shell">
       <Header
         devices={devices}
         selectedDevice={selectedDevice}
@@ -361,15 +361,6 @@ export default function App() {
         onOpenShortcuts={() => setIsShortcutsModalOpen(true)}
       />
 
-      <div className="desktop-window-bar hidden lg:flex">
-        <div className="traffic-lights" aria-label="Window controls">
-          <span className="traffic-light red" />
-          <span className="traffic-light yellow" />
-          <span className="traffic-light green" />
-        </div>
-        <div className="window-title-label">Scrcpy Hub</div>
-      </div>
-
       {notification && (
         <div className="fixed right-5 top-5 z-50 animate-in fade-in slide-in-from-top-2 duration-200">
           <div className="surface flex max-w-sm items-center gap-2.5 px-3.5 py-3 text-[12px] font-medium">
@@ -381,7 +372,7 @@ export default function App() {
         </div>
       )}
 
-      <main className="scrollbar-soft flex min-w-0 flex-1 flex-col overflow-y-auto">
+      <main className="main-content scrollbar-soft">
         <div className="window-drag-region sticky top-0 z-20 border-b border-[var(--border)] bg-[rgba(13,15,18,0.8)] px-5 py-3 backdrop-blur-xl lg:hidden">
           <div className="flex items-center justify-between">
             <div>
@@ -445,13 +436,13 @@ export default function App() {
 
                 <div className="panel-body tight">
                   {devices.length === 0 ? (
-                    <div className="flex min-h-[220px] flex-col items-center justify-center px-8 text-center">
+                    <div className="empty-state">
                       <Smartphone className="mb-4 h-9 w-9 text-[var(--text-muted)]" />
                       <h3 className="text-[15px] font-semibold text-[var(--text)]">No Android devices connected</h3>
                       <p className="mt-2 max-w-sm text-[13px] leading-6 text-[var(--text-secondary)]">
                         Connect through USB or add a wireless ADB endpoint to start mirroring.
                       </p>
-                      <div className="mt-4 flex items-center gap-2">
+                      <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
                         <button type="button" onClick={() => fetchDevices()} className="btn">Refresh</button>
                         <button type="button" onClick={() => setIsWirelessModalOpen(true)} className="btn btn-primary">Connect device</button>
                       </div>

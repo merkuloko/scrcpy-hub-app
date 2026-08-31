@@ -33,13 +33,13 @@ let mainWindow = null;
 const activeProcesses = new Map();
 
 function createWindow() {
-  const iconPath = path.join(__dirname, 'build', 'icon.png');
+  const iconPath = path.join(__dirname, 'assets', 'ikon.png');
   const appIcon = nativeImage.createFromPath(iconPath);
 
   mainWindow = new BrowserWindow({
     width: 1100,
     height: 800,
-    minWidth: 860,
+    minWidth: 640,
     minHeight: 640,
     titleBarStyle: 'hiddenInset', 
     trafficLightPosition: { x: 18, y: 18 },

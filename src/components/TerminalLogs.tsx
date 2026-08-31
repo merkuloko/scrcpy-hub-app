@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Check, ChevronDown, ChevronUp, Copy, Search, Terminal, Trash2 } from 'lucide-react';
 import { LogEntry } from '../types';
 
@@ -9,12 +9,12 @@ interface TerminalLogsProps {
   onToggle: () => void;
 }
 
-export const TerminalLogs: React.FC<TerminalLogsProps> = ({
+export const TerminalLogs = memo(function TerminalLogs({
   logs,
   onClearLogs,
   isOpen,
   onToggle,
-}) => {
+}: TerminalLogsProps) {
   const [filterText, setFilterText] = useState('');
   const [selectedLevel, setSelectedLevel] = useState<string>('all');
   const [copied, setCopied] = useState(false);
@@ -26,20 +26,20 @@ export const TerminalLogs: React.FC<TerminalLogsProps> = ({
     }
   }, [logs, isOpen]);
 
-  const filteredLogs = logs.filter((log) => {
+  const filteredLogs = useMemo(() => logs.filter((log) => {
     const matchesFilter = !filterText || log.message.toLowerCase().includes(filterText.toLowerCase()) || (log.serial && log.serial.includes(filterText));
     const matchesLevel = selectedLevel === 'all' || log.level === selectedLevel;
     return matchesFilter && matchesLevel;
-  });
+  }), [filterText, logs, selectedLevel]);
 
-  const handleCopyLogs = () => {
+  const handleCopyLogs = useCallback(() => {
     const text = filteredLogs
       .map((log) => `[${new Date(log.timestamp).toLocaleTimeString()}] [${log.level.toUpperCase()}] ${log.serial ? `(${log.serial}) ` : ''}${log.message}`)
       .join('\n');
     navigator.clipboard.writeText(text);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
-  };
+  }, [filteredLogs]);
 
   return (
     <section className="mt-auto border-t border-[var(--border)] bg-[rgba(16,17,19,0.78)] backdrop-blur-xl">
@@ -129,4 +129,4 @@ export const TerminalLogs: React.FC<TerminalLogsProps> = ({
       )}
     </section>
   );
-};
+});
